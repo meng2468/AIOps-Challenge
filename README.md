@@ -21,15 +21,27 @@ The throubleshooting in the figure has 3 steps:
 
 ## Data 
 ### ESB business indicator(ESB)
-Minute-wise request information for osb_001. We're only provided with a day??
+Minute-wise request information for osb_001
 - startTime: aggr. info on all requests for the following minute
 - avg_time: average time spent processing a request.
 - num: number of requests
 - succee_num: the number of submitted requests which are successfully completed.
 - succee_rate: succee_num / num
 
+EDA: https://github.com/meng2468/anm-project/blob/main/eda/esb.ipynb
+
 ### Trace
-Not quite sure yet
+- id: span id
+- pid: parent span id
+- tracid: id of trace the span belongs to
+- cmdb_id: host
+- callType: csv's are split based on this
+    - osb, remoteprocess, flyremote inside span
+    - csf, local, jdbc outside of span
+- success: whether service is processed succesfully
+- dsName: database accesed by microservice
+
+EDA: https://github.com/meng2468/anm-project/blob/main/eda/trace.ipynb
 
 ### Host KPIs data
 Time series KPI (Key Performance Indicator) data for different hosts
