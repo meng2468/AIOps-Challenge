@@ -16,12 +16,12 @@ Find out system nodes (vm or docker) and KPIs where the root cause occurs when a
 
 The throubleshooting in the figure has 3 steps:
 1. Find the time point when the business success rate was significantly lower than 1.
-2. Around the time point , look into the anomalous behaviors of microservices and record containers or hosts where the microservices are deployed. (Trace data)
+2. Around the time point, look into the anomalous behaviors of microservices and record containers or hosts where the microservices are deployed. (Trace data)
 3. After the abnormal nodes, hosts or containers, are found.  Detect which KPIs of the nodes perform anomalously.
 
 ## Data 
 ### ESB business indicator(ESB)
-Minute-wise request information for osb_001
+Minute-wise request information for osb_001. We're only provided with a day??
 - startTime: aggr. info on all requests for the following minute
 - avg_time: average time spent processing a request.
 - num: number of requests
@@ -32,7 +32,7 @@ Minute-wise request information for osb_001
 Not quite sure yet
 
 ### Host KPIs data
-Time series KPI data for different hosts
+Time series KPI (Key Performance Indicator) data for different hosts
 - itemid: KPI identifier?
 - name: KPI identifier?
 - bomc_id: KPI identifier?
