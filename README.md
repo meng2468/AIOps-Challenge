@@ -1,6 +1,6 @@
 # ANM Project
 ## Project Resources
-- Elearning documents in /Introduction
+- Elearning documents in /Information
 - https://github.com/NetManAIOps/aiops2020-judge/tree/master/final (Competition Github)
 - https://cloud.tsinghua.edu.cn/f/e06aaab7135c44e8beec/?dl=1 (Conmpetition Slides)
 - http://81.70.98.179:8000/standings/show/ (Ranking)
