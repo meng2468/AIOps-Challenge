@@ -130,3 +130,7 @@ dmypy.json
 
 #I've got a Mac
 .DS_Store
+
+#Data
+2020_05_04
+cmdb.xlsx
