@@ -16,7 +16,7 @@ from joblib import dump, load
 
 import pandas as pd
 
-if __name__ == "__main__":
+def train_vae():
     esb_data = pd.read_csv('../data/training_data/2020_05_04/esb.csv')
     print(esb_data)
     esb_data = esb_data[['avg_time', 'succee_rate']]
@@ -39,3 +39,4 @@ if __name__ == "__main__":
 
     evaluate_print(clf_name, [0 for _ in range(len(y_test_scores)-1)] + [1], y_test_scores)
 
+    return clf

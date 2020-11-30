@@ -5,13 +5,15 @@ import requests
 import json
 
 from kafka import KafkaConsumer
+import train_vae
 
+from server_config import SERVER_CONFIGURATION
 
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
 AVAILABLE_TOPICS = set(['platform-index', 'business-index', 'trace'])
 CONSUMER = KafkaConsumer('platform-index', 'business-index', 'trace',
-                         bootstrap_servers=['172.21.0.8', ],
+                         bootstrap_servers=[SERVER_CONFIGURATION["KAFKA_QUEUE"], ],
                          auto_offset_reset='latest',
                          enable_auto_commit=False,
                          security_protocol='PLAINTEXT')
@@ -81,7 +83,7 @@ def submit(ctx):
         assert(isinstance(tp[0], str))
         assert(isinstance(tp[1], str) or (tp[1] is None))
     data = {'content': json.dumps(ctx)}
-    r = requests.post('http://172.21.0.8:8000/standings/submit/', data=json.dumps(data))
+    r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
 
 def main():
@@ -89,8 +91,11 @@ def main():
     # Check authorities
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
 
-    submit([['docker_003', 'container_cpu_used']])
+    #submit([['docker_003', 'container_cpu_used']])  FIXME Why was this here? 
     i = 0
+    #clf = train_vae.train_vae()
+
+    print(f'Starting connection with server at {SERVER_CONFIGURATION["KAFKA_QUEUE"]}')
     for message in CONSUMER:
         i += 1
         data = json.loads(message.value.decode('utf8'))
