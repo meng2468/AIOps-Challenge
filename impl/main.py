@@ -9,6 +9,8 @@ import train_vae
 
 from server_config import SERVER_CONFIGURATION
 
+import pandas as pd
+
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
 AVAILABLE_TOPICS = set(['platform-index', 'business-index', 'trace'])
@@ -93,7 +95,7 @@ def main():
 
     #submit([['docker_003', 'container_cpu_used']])  FIXME Why was this here? 
     i = 0
-    #clf = train_vae.train_vae()
+    clf = train_vae.train_vae()
 
     print(f'Starting connection with server at {SERVER_CONFIGURATION["KAFKA_QUEUE"]}')
     for message in CONSUMER:
@@ -120,6 +122,11 @@ def main():
                     for key in data['body']
                 },
             }
+            for f in data['body']['esb']:
+                v = pd.DataFrame({'avg_time': [f.avg_time], 'succee_rate': [f.succee_rate]})
+                res = clf.predict(v)
+                print(f'Result was {res}')
+
             timestamp = data['startTime']
         else:  # message.topic == 'trace'
             data = {

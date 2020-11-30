@@ -34,4 +34,4 @@ if __name__ == '__main__':
     while True:
         producer.send('business-index', value=json_object)
         print('ZZZZzzzz')
-        sleep(1)
+        sleep(5)
