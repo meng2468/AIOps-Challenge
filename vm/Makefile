@@ -5,5 +5,3 @@ REQUIREMENTS =
 
 migrate_dir: 
 	@scp -r * root@$(VM_SERVER):/$(VM_PATH)
-
-setup_requirements:

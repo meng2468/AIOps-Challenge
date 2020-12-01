@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 from kafka import KafkaConsumer
 
-
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
 AVAILABLE_TOPICS = set(['platform-index', 'business-index', 'trace'])
@@ -17,6 +16,9 @@ CONSUMER = KafkaConsumer('platform-index', 'business-index', 'trace',
                          enable_auto_commit=False,
                          security_protocol='PLAINTEXT')
 
+df_host = pd.DataFrame(columns=['item_id', 'name', 'bomc_id', 'timestamp', 'value', 'cmdb_id'])
+df_esb = pd.DataFrame(columns=['service_name', 'start_time', 'avg_time', 'num', 'succee_num', 'succee_rate'])
+df_trace = pd.DataFrame(columns=['call_type', 'start_time', 'elapsed_time', 'success', 'trace_id', 'id', 'pid', 'cmdb_id', 'service_name', 'ds_name'])
 
 class PlatformIndex():  # pylint: disable=too-few-public-methods
     '''Structure for platform indices'''
@@ -31,7 +33,9 @@ class PlatformIndex():  # pylint: disable=too-few-public-methods
         self.value = data['value']
         self.cmdb_id = data['cmdb_id']
 
-        print(data)
+        df_host = df_host.append(data, ignore_index=True)
+
+
         
 
 
@@ -48,6 +52,9 @@ class BusinessIndex():  # pylint: disable=too-few-public-methods
         self.num = data['num']
         self.succee_num = data['succee_num']
         self.succee_rate = data['succee_rate']
+    
+        df_esb = df_esb.append(data, ignore_index=True)
+
 
 
 class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-few-public-methods
@@ -74,6 +81,8 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
             # For data['callType'] in ['JDBC', 'LOCAL']
             self.ds_name = data['dsName']
 
+        df_trace = df_trace.append(data, ignore_index=True)
+
 
 def submit(ctx):
     '''Submit answer into stdout'''
@@ -91,6 +100,7 @@ def submit(ctx):
 def main():
     '''Consume data and react'''
     # Check authorities
+
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
 
     submit([['docker_003', 'container_cpu_used']])
@@ -127,6 +137,7 @@ def main():
             }
             timestamp = data['startTime']
         print(i, message.topic, timestamp)
+        print(df_esb.shape, df_host.shape, df_trace.shape)
 
 
 if __name__ == '__main__':
