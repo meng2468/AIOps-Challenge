@@ -5,6 +5,7 @@ import requests
 import json
 import numpy as np
 import pandas as pd
+import datetime
 from kafka import KafkaConsumer
 
 # Three topics are available: platform-index, business-index, trace.
@@ -15,10 +16,6 @@ CONSUMER = KafkaConsumer('platform-index', 'business-index', 'trace',
                          auto_offset_reset='latest',
                          enable_auto_commit=False,
                          security_protocol='PLAINTEXT')
-
-df_host = pd.DataFrame(columns=['item_id', 'name', 'bomc_id', 'timestamp', 'value', 'cmdb_id'])
-df_esb = pd.DataFrame(columns=['service_name', 'start_time', 'avg_time', 'num', 'succee_num', 'succee_rate'])
-df_trace = pd.DataFrame(columns=['call_type', 'start_time', 'elapsed_time', 'success', 'trace_id', 'id', 'pid', 'cmdb_id', 'service_name', 'ds_name'])
 
 class PlatformIndex():  # pylint: disable=too-few-public-methods
     '''Structure for platform indices'''
@@ -33,12 +30,7 @@ class PlatformIndex():  # pylint: disable=too-few-public-methods
         self.value = data['value']
         self.cmdb_id = data['cmdb_id']
 
-        df_host = df_host.append(data, ignore_index=True)
-
-
         
-
-
 class BusinessIndex():  # pylint: disable=too-few-public-methods
     '''Structure for business indices'''
 
@@ -52,9 +44,6 @@ class BusinessIndex():  # pylint: disable=too-few-public-methods
         self.num = data['num']
         self.succee_num = data['succee_num']
         self.succee_rate = data['succee_rate']
-    
-        df_esb = df_esb.append(data, ignore_index=True)
-
 
 
 class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-few-public-methods
@@ -81,63 +70,66 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
             # For data['callType'] in ['JDBC', 'LOCAL']
             self.ds_name = data['dsName']
 
-        df_trace = df_trace.append(data, ignore_index=True)
+def init_dfs():
+    df_esb = pd.DataFrame(columns=['service_name', 'start_time', 'avg_time', 'num', 'succee_num', 'succee_rate'])
+    df_host = pd.DataFrame(columns=['item_id', 'name', 'bomc_id', 'timestamp', 'value', 'cmdb_id'])
+    df_trace = pd.DataFrame(columns=['call_type', 'start_time', 'elapsed_time', 'success','trace_id', 'id', 'pid', 'cmdb_id', 'service_name', 'ds_name'])
 
-
-def submit(ctx):
-    '''Submit answer into stdout'''
-    # print(json.dumps(data))
-    assert (isinstance(ctx, list))
-    for tp in ctx:
-        assert(isinstance(tp, list))
-        assert(len(tp) == 2)
-        assert(isinstance(tp[0], str))
-        assert(isinstance(tp[1], str) or (tp[1] is None))
-    data = {'content': json.dumps(ctx)}
-    r = requests.post('http://172.21.0.8:8000/standings/submit/', data=json.dumps(data))
-
+    return df_esb, df_host, df_trace
 
 def main():
     '''Consume data and react'''
     # Check authorities
+    df_esb, df_host, df_trace = init_dfs()
 
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
-
-    submit([['docker_003', 'container_cpu_used']])
     i = 0
     for message in CONSUMER:
+        if datetime.datetime.now().minute == '0':
+            
+
         i += 1
+            
         data = json.loads(message.value.decode('utf8'))
         if message.topic == 'platform-index':
             # data['body'].keys() is supposed to be
             # ['os_linux', 'db_oracle_11g', 'mw_redis', 'mw_activemq',
             #  'dcos_container', 'dcos_docker']
-            data = {
-                'timestamp': data['timestamp'],
-                'body': {
-                    stack: [PlatformIndex(item) for item in data['body'][stack]]
-                    for stack in data['body']
-                },
-            }
+            # data = {
+            #     'timestamp': data['timestamp'],
+            #     'body': {
+            #         stack: [PlatformIndex(item) for item in data['body'][stack]]
+            #         for stack in data['body']
+            #     },
+            # }
+            for stack in data['body']:
+                for item in data['body'][stack]:
+                    # df_host = df_host.append(item, ignore_index=True)
+                    print(item)
             timestamp = data['timestamp']
         elif message.topic == 'business-index':
             # data['body'].keys() is supposed to be ['esb', ]
-            data = {
-                'startTime': data['startTime'],
-                'body': {
-                    key: [BusinessIndex(item) for item in data['body'][key]]
-                    for key in data['body']
-                },
-            }
+            # data = {
+            #     'startTime': data['startTime'],
+            #     'body': {
+            #         key: [BusinessIndex(item) for item in data['body'][key]]
+            #         for key in data['body']
+            #     },
+            # }
+            for stack in data['body']:
+                for item in data['body'][stack]:
+                    # df_host = df_host.append(item, ignore_index=True)
+                    print(item)
             timestamp = data['startTime']
         else:  # message.topic == 'trace'
-            data = {
-                'startTime': data['startTime'],
-                'body': Trace(data),
-            }
+            # data = {
+            #     'startTime': data['startTime'],
+            #     'body': Trace(data),
+            # }
+            print(data)
             timestamp = data['startTime']
         print(i, message.topic, timestamp)
-        print(df_esb.shape, df_host.shape, df_trace.shape)
+        print(df_host.shape)
 
 
 if __name__ == '__main__':
