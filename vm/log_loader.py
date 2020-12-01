@@ -19,12 +19,13 @@ CONSUMER = KafkaConsumer('platform-index', 'business-index', 'trace',
 def main():
     '''Consume data and react'''
     # Check authorities
+    start = datetime.datetime.now()
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
     i = 0
     for message in CONSUMER:
         i += 1
         folder = 'logs/'
-        date_pref = datetime.datetime.now().strftime('%d-%m:%H')
+        date_pref = datetime.datetime.now().strftime('%H')
             
         data = json.loads(message.value.decode('utf8'))
         if message.topic == 'platform-index':
@@ -44,6 +45,8 @@ def main():
                 csv.writer(csv_file).writerow([str(x) for x in data.values()])    
             timestamp = data['startTime']
         print(i, message.topic, timestamp)
+        if (datetime.datetime.now() - start).seconds > 43200:
+            return
 
 
 if __name__ == '__main__':
