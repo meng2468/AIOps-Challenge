@@ -3,7 +3,8 @@ Example for data consuming.
 '''
 import requests
 import json
-
+import numpy as np
+import pandas as pd
 from kafka import KafkaConsumer
 
 
@@ -29,6 +30,9 @@ class PlatformIndex():  # pylint: disable=too-few-public-methods
         self.timestamp = data['timestamp']
         self.value = data['value']
         self.cmdb_id = data['cmdb_id']
+
+        print(data)
+        
 
 
 class BusinessIndex():  # pylint: disable=too-few-public-methods
