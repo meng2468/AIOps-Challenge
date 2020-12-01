@@ -23,24 +23,24 @@ def main():
     i = 0
     for message in CONSUMER:
         i += 1
-        folder = 'logs'
+        folder = 'logs/'
         date_pref = datetime.datetime.now().strftime('%d-%m:%H')
             
         data = json.loads(message.value.decode('utf8'))
         if message.topic == 'platform-index':
-            with open(date_pref+'_host.csv', 'a') as csv_file:
+            with open(folder+date_pref+'_host.csv', 'a') as csv_file:
                 for stack in data['body']:
                     for item in data['body'][stack]:
                         csv.writer(csv_file).writerow([str(x) for x in item.values()])
             timestamp = data['timestamp']
         elif message.topic == 'business-index':
-            with open(date_pref+'_esb.csv', 'a') as csv_file:
+            with open(folder+date_pref+'_esb.csv', 'a') as csv_file:
                 for stack in data['body']:
                     for item in data['body'][stack]:
                         csv.writer(csv_file).writerow([str(x) for x in item.values()])            
             timestamp = data['startTime']
         else:
-            with open(date_pref+'_trace.csv', 'a') as csv_file:
+            with open(folder+date_pref+'_trace.csv', 'a') as csv_file:
                 csv.writer(csv_file).writerow([str(x) for x in data.values()])    
             timestamp = data['startTime']
         print(i, message.topic, timestamp)
