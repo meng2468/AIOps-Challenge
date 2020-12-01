@@ -15,9 +15,9 @@ Human operators can then affect whether to declare an anomaly by choosing a thre
 Find out system nodes (vm or docker) and KPIs where the root cause occurs when a failure happens.
 
 The throubleshooting in the figure has 3 steps:
-1. Find the time point when the business success rate was significantly lower than 1.
-2. Around the time point, look into the anomalous behaviors of microservices and record containers or hosts where the microservices are deployed. (Trace data)
-3. After the abnormal nodes, hosts or containers, are found.  Detect which KPIs of the nodes perform anomalously.
+1. Find the time point when the business success rate was significantly lower than 1. (ESB)
+2. Around the time point, look into the anomalous behaviors of microservices and record containers or hosts where the microservices are deployed. (Trace)
+3. After the abnormal nodes, hosts or containers, are found.  Detect which KPIs of the nodes perform anomalously. (KPI)
 
 ## Data 
 ### ESB business indicator(ESB)
