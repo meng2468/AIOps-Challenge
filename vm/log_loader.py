@@ -48,6 +48,5 @@ def main():
         if (datetime.datetime.now() - start).seconds > 43200:
             return
 
-
 if __name__ == '__main__':
     main()
