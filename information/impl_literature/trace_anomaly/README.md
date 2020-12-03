@@ -10,6 +10,10 @@ URL: https://netman.aiops.org/~peidan/ANM2020/7.TraceAnomalyDetection/LectureCov
     - Historical time-series metrics
     - Current time-series metrics
     - Call graph 
+- Main features are
+    - Random walk over call graph
+    - Clustering to detect candidate anomalies
+    - Metric similarity to counteract external factors
 
 ##### Call Graph Issues 
 - Might not represent true dependencies
@@ -28,6 +32,8 @@ MonitorRank consists of three different components
 ###### Batch-Mode Engine 
 - Generates call graph with a HADOOP job
 - Clusters sensors together based on historical correlation
+>Then for every pseudo-anomaly we need to compute the similarity of the corresponding metric data against those of all the other sensors. 
+- Does some shit with similarity
 
 ###### Real-time Engine 
 
