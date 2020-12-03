@@ -1,5 +1,5 @@
 # Paper Notes
-Thoughts / Summaries on Relevant Papers
+Thoughts / Summaries of Relevant Papers
 
 #### Root Cause Detection in a Service-Oriented Architecture
 URL: https://netman.aiops.org/~peidan/ANM2020/7.TraceAnomalyDetection/LectureCoverage/2013SIGMETRICS13_Root%20Cause%20Detection%20in%20a%20Service-Oriented%20Architecture.pdf
@@ -26,7 +26,7 @@ URL: https://netman.aiops.org/~peidan/ANM2020/7.TraceAnomalyDetection/LectureCov
 MonitorRank consists of three different components
 ###### Metrics Collection 
 - Consumes Kafka data
-- Buffers and aggregates to coarser time granularity (how coarse?)
+- Buffers and aggregates to coarser time granularity (every 1 min)
 - Stores into time-partitioned database
 
 ###### Batch-Mode Engine 
