@@ -4,13 +4,13 @@ Thoughts / Summaries of Relevant Papers
 #### Root Cause Detection in a Service-Oriented Architecture
 URL: https://netman.aiops.org/~peidan/ANM2020/7.TraceAnomalyDetection/LectureCoverage/2013SIGMETRICS13_Root%20Cause%20Detection%20in%20a%20Service-Oriented%20Architecture.pdf
 
-##### MonitorRank
-- Provides ranking of possible root causes
-- Unsupervised model uses
+##### Approach
+- Ranking of possible root causes
+- Uses unsupervised model on
     - Historical time-series metrics
     - Current time-series metrics
     - Call graph 
-- Main features are
+- Features
     - Random walk over call graph
     - Clustering to detect candidate anomalies
     - Metric similarity to counteract external factors
@@ -43,3 +43,17 @@ URL: https://github.com/meng2468/anm-project/blob/main/information/impl_literatu
 
 ###### Approach (RIP)
 >To train the models, we need not only trace logs under successful executions but also trace logs under erroneous executions. 
+
+#### Anomaly Detection from System Tracing Data using Multimodal Deep Learning
+
+###### Feasibility
+- Definitely applicable to our project
+- Would surrender parent / child information of calls
+
+###### Approach
+One model for structure, one for response time
+- LSTM with softmax to predict probabilities for next label in trace (meant to learn underlying execution paths)
+- LSTM regression on response time for next event (msle)
+
+Merges both modalities on the first LSTM layer
+
