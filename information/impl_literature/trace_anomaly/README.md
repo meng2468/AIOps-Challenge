@@ -57,3 +57,8 @@ One model for structure, one for response time
 
 Merges both modalities on the first LSTM layer
 
+#### Anomaly Detection and Classification using Distributed Tracing and Deep Learning
+
+###### Approach
+- RRN (VAE) with GRU cells for response time prediction
+- Hamming smoothing filter for noise removal / reduction
