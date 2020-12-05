@@ -2,8 +2,6 @@
 Thoughts / Summaries of Relevant Papers
 
 #### Root Cause Detection in a Service-Oriented Architecture
-URL: https://netman.aiops.org/~peidan/ANM2020/7.TraceAnomalyDetection/LectureCoverage/2013SIGMETRICS13_Root%20Cause%20Detection%20in%20a%20Service-Oriented%20Architecture.pdf
-
 ##### Approach
 - Ranking of possible root causes
 - Uses unsupervised model on
@@ -39,8 +37,6 @@ MonitorRank consists of three different components
 
 
 #### Latent Error Prediction and Fault Localization for Microservice Applications by Learning from System Trace Logs
-URL: https://github.com/meng2468/anm-project/blob/main/information/impl_literature/trace_anomaly/Latent%20Error%20Prediction%20and%20Fault%20Localization%20for%20Microservice%20Applications%20by%20Learning%20from%20System%20Trace%20Logs.pdf
-
 ###### Approach (RIP)
 >To train the models, we need not only trace logs under successful executions but also trace logs under erroneous executions. 
 

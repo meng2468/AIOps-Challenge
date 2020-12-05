@@ -10,7 +10,7 @@ from __future__ import print_function
 import os
 import sys
 
-from pyod.models.vae import VAE
+fromg import VAE
 from pyod.utils.data import evaluate_print
 from joblib import dump, load
 
