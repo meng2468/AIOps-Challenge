@@ -5,8 +5,7 @@ def trace_to_call_path(df):
     df : Trace Pandas dataframe. The dataframe must be sorted and pre processed
     Pre processing includes dsName being removed from JDBC and LOCAL
     """
-    print(df)
-
+    
     # transform CSF serviceName
     ids = df[df['callType'] == 'CSF']['id']
     children_cmdb = df[df['pid'].isin(ids)]['cmdb_id']
