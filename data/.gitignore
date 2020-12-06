@@ -1,3 +1,3 @@
-*.csv
+training_data/*.csv
 cmdb.xlsx
 *.zip
