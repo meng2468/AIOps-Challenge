@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.functional as F
+import numpy as np
 
-import utils
+from . import utils
 
 class TraceAnomalyDetector(nn.Module):
 
@@ -24,8 +25,20 @@ class TraceAnomaly:
         # path : position
         self.paths = {data[i]: i for i in range(len(data))}
 
+    @property
+    def n_dim(self):
+        return len(self.paths)
 
-    def get_stv(self, dataframe):
+    def to_dense_stv(self, sparse_stv):
+        """
+        Convert a dictionary STV (sparse) into a dense vector of dimension n_dim = len(self.paths)
+        """
+        dense_stv = np.zeros(self.n_dim)
+        for key, value in sparse_stv.items():
+            dense_stv[key] = value
+        return dense_stv
+
+    def get_stv(self, dataframe, sparse=True):
         """dataframe should be a single trace already pre processed"""
         graph = list(utils.trace_to_call_path(dataframe))
         
@@ -33,5 +46,5 @@ class TraceAnomaly:
         indexes = tuple(map(lambda x: self.paths[x[:2]], graph))
 
         # id : val
-        return dict(zip(indexes, tuple(map(lambda x: x[2], graph))))
-
+        sparse_stv = dict(zip(indexes, tuple(map(lambda x: x[2], graph))))
+        return sparse_stv if sparse else self.to_dense_stv(sparse_stv)
