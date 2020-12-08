@@ -9,7 +9,8 @@ from matplotlib import pyplot as plt
 from sklearn import preprocessing
 
 data_path = '../../../data/train_data/host'
-save_dir = '' # Model save-file directory
+save_dir = '../../../data/vae/models/' # Model save-file directory
+thresh_dir = '../../../data/vae/'
 dfs = {}
    
 for file in os.listdir(data_path):
@@ -96,7 +97,51 @@ for key in dfs:
         print(xt.shape)
         model = get_model(xt)
         history = train_model(model, xt)
-     
+
         model.save(save_dir + str(key) + '_' + name)
         models.append(model)
         histories.append(history)
+
+def gen_thresh():  
+  threshholds = []
+  ignore = False
+  for key in dfs:
+    print("DF " + key)
+    df = dfs[key]
+
+    for name in df['name'].unique():
+      df_n = df[df['name'] == name]
+      if df_n.shape[0] >30000:
+          time_step = 288
+      elif df_n.shape[0] > 5000:
+          time_step = 144
+      else:
+          time_step = 12
+      x_train_list=[]
+      
+      for host in df_n['cmdb_id'].unique():
+        df_nh = df_n[df_n['cmdb_id']==host][['value']]
+        if len(df_nh.values) - time_step <= 0:
+          ignore = True
+          break
+        else:
+          df_nh = normalise(df_nh)
+          x_train_list.append(gen_train_seq(df_nh.values, time_step))
+
+      if ignore:
+        ignore = False
+        continue
+      print("Loading ", key, name)
+      model = keras.models.load_model(save_dir+key+'_'+name)
+      # model = keras.models.load_model('/content/drive/MyDrive/anm-data/models/os_linux_FS_max_util')
+      x_train = np.concatenate(x_train_list)
+      x_train_pred = model.predict(x_train)
+
+      train_mae_loss = np.mean(np.abs(x_train_pred - x_train), axis=1)
+      threshold = np.max(train_mae_loss)
+      threshholds.append((name, threshold))
+    return threshholds
+
+threshholds = gen_thresh
+thresh = pd.DataFrame(threshholds, columns=['name','threshhold'])
+thresh.to_csv(thresh_dir+'threshholds.csv', index=False)
