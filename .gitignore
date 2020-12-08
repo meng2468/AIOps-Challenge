@@ -136,3 +136,5 @@ dmypy.json
 #Data
 cmdb.xlsx
 *.csv
+
+!/impl/models/trace_localisation/microrca/data/*.csv
