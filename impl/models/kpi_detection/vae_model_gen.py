@@ -6,6 +6,8 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from matplotlib import pyplot as plt
 
+from sklearn import preprocessing
+
 data_path = '../../../data/train_data/host'
 save_dir = '' # Model save-file directory
 dfs = {}
@@ -15,13 +17,7 @@ for file in os.listdir(data_path):
     dfs[file[:-4]] = pd.read_csv(data_path+'/'+file) 
 
 def normalise(df):
-    mean = df['value'].mean()
-    std = df['value'].std()
-    if std == 0:
-        df['value'] = df['value'] - mean
-        return df
-    
-    df['value'] = (df['value'] - mean) / std
+    df['value'] = preprocessing.scale(df['value'].values)
     return df
 
 def gen_train_seq(values, time_steps=288):
@@ -59,7 +55,7 @@ def train_model(model, x_train):
     history = model.fit(
         x_train,
         x_train,
-        epochs=60,
+        epochs=120,
         batch_size=128,
         validation_split=0.1,
         callbacks=[
@@ -68,9 +64,10 @@ def train_model(model, x_train):
     )
     return history
 
-
 models = []
+failures = []
 histories = []
+cancel = False
 for key in dfs:
     df = dfs[key]
     for name in list(df['name'].unique()):
@@ -81,24 +78,25 @@ for key in dfs:
             time_step = 144
         else:
             time_step = 12
-        x_train=np.empty((1,time_step,1))
+        x_train_list=[]
         for host in list(df_n['cmdb_id'].unique()):
             df_nh = df_n[df_n.cmdb_id==host][['value']]
-            df_nh = normalise(df_nh)
-            x_train = np.concatenate((x_train, gen_train_seq(df_nh.values, time_step)), axis=0)
+            if len(df_nh.values) - time_step <= 0:
+              failures.append((name, host))
+              cancel = True
+            else:
+              df_nh = normalise(df_nh)
+              x_train_list.append(gen_train_seq(df_nh.values, time_step))
 
-        nan_in = np.isnan(x_train)
-        x_train[nan_in] = 0
-
-        print('Training ', name)
-        model = get_model(x_train)
-        history = train_model(model, x_train)
-
+        if cancel:
+          print("Cancelling for ", failures[-1])
+          cancel = False
+          continue
+        xt = np.concatenate(x_train_list)
+        print(xt.shape)
+        model = get_model(xt)
+        history = train_model(model, xt)
      
         model.save(save_dir + str(key) + '_' + name)
         models.append(model)
         histories.append(history)
-
-
-
-
