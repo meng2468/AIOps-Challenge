@@ -2,6 +2,8 @@ import pandas as pd
 from sklearn.cluster import Birch
 import pickle
 import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 
 class MicroRCA:
 
@@ -47,12 +49,19 @@ class MicroRCA:
         #   1.1 microRCA
 
         traces = self.get_anomalous_traces(traces)
-        print(traces, len(traces))
+        # print(traces, len(traces))
+        # print(parsed_traces[traces[0]].head())
+        # print('Unique services in trace:', len(parsed_traces[traces[0]]['serviceName'].unique()))
 
+        # Should we iterate here over each trace in traces or consider them all together?
+        # for trace_id in traces:
+        #   trace = parsed_traces[trace_id]
+        #   ... [Perform the rest of the steps]
 
-        # TODO Build attribute graph
+        # TODO Build attribute graph 
         # Hosts + Service
         # Each service connects to all the services it communicates with and all hosts it connects to (no need to differentiate!)
+        DG = self.trace_graph(parsed_traces[traces[0]])
 
         # TODO Extract Subgraph
         # Find anomalous nodes (high elapsed time)
@@ -88,12 +97,56 @@ class MicroRCA:
         # for key in traces:
         #     df = traces[key].sort_values('startTime')
         #     print(df['elapsedTime'].iloc[0], df['traceId'].iloc[0], sep='\t')
-        i = 1
+        # i = 1
+        return traces 
+
     def parse_kpis(self, kpis):
         pass
 
     def anomalus_subgraph(self, DirectedGraph, anomalies, ):
         pass
+
+    def trace_graph(self, trace):
+        DG = nx.DiGraph()
+        
+        hosts = trace['cmdb_id'].unique()
+        services = trace['serviceName'].unique()
+
+        # print(30*'-')
+        # print(hosts, len(hosts))
+        # print(services, len(services))
+        # print(30*'-')
+
+        # Add nodes to the graph
+        for node in hosts:
+            DG.add_node(node, type='host')
+        
+        for node in services:
+            DG.add_node(node, type='service')
+  
+        # Add edges to the graph
+        for _, row in trace.iterrows():
+            parent = trace[trace['id'] == row['pid']]['serviceName']
+            service = row['serviceName']
+            host = row['cmdb_id']
+        
+            # Parent service to current service
+            if(len(parent)): # Parent may be empty
+                DG.add_edge(parent.values[0], service)
+         
+            # Current service to its host
+            DG.add_edge(service, host)
+
+        # print(DG.nodes(data=True), len(DG.nodes()))
+
+        # plt.figure(figsize=(9,9))
+        # pos = nx.spring_layout(DG)
+        # nx.draw(DG, pos, with_labels=True, cmap = plt.get_cmap('jet'), node_size=1500, arrows=True)
+        # labels = nx.get_edge_attributes(DG, 'weight')
+        # nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
+        # plt.show()
+
+        return DG
 
 
 if __name__ == '__main__':
