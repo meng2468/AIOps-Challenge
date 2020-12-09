@@ -56,12 +56,13 @@ class MicroRCA:
         # Should we iterate here over each trace in traces or consider them all together?
         # for trace_id in traces:
         #   trace = parsed_traces[trace_id]
+        #   DG = self.trace_graph(trace)
         #   ... [Perform the rest of the steps]
 
         # TODO Build attribute graph 
         # Hosts + Service
         # Each service connects to all the services it communicates with and all hosts it connects to (no need to differentiate!)
-        DG = self.trace_graph(parsed_traces[traces[0]])
+        DG = self.trace_graph(parsed_traces[traces[0]], visualize=True)
 
         # TODO Extract Subgraph
         # Find anomalous nodes (high elapsed time)
@@ -106,7 +107,7 @@ class MicroRCA:
     def anomalus_subgraph(self, DirectedGraph, anomalies, ):
         pass
 
-    def trace_graph(self, trace):
+    def trace_graph(self, trace, visualize=False):
         DG = nx.DiGraph()
         
         hosts = trace['cmdb_id'].unique()
@@ -137,14 +138,20 @@ class MicroRCA:
             # Current service to its host
             DG.add_edge(service, host)
 
-        # print(DG.nodes(data=True), len(DG.nodes()))
+        if visualize:
+            print(DG.nodes(data=True), len(DG.nodes()))
 
-        # plt.figure(figsize=(9,9))
-        # pos = nx.spring_layout(DG)
-        # nx.draw(DG, pos, with_labels=True, cmap = plt.get_cmap('jet'), node_size=1500, arrows=True)
-        # labels = nx.get_edge_attributes(DG, 'weight')
-        # nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
-        # plt.show()
+            plt.figure(figsize=(9,9))
+            pos = nx.spring_layout(DG)
+            nx.draw(DG, pos, with_labels=True, cmap=plt.get_cmap('jet'), node_size=0, arrows=True)
+
+            nx.draw_networkx_nodes(DG, pos, nodelist=hosts, node_color="r", node_size=1500)
+            nx.draw_networkx_nodes(DG, pos, nodelist=services, node_color="b", node_size=500)
+            nx.draw_networkx_edges(DG, pos, width=1.0, alpha=0.5)
+
+            labels = nx.get_edge_attributes(DG, 'weight')
+            nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
+            plt.show()
 
         return DG
 
