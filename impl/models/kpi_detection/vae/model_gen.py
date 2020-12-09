@@ -46,4 +46,7 @@ def save_model(x_train, save_dir, key, name):
     history = train_model(model, x_train)
     model.save(save_dir + key + '_' + name)
     return model, history
-    
+
+def load_model(model_dir, key, name):
+    model = keras.models.load(model_dir+key+'_'+name)
+    return model

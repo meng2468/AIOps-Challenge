@@ -8,11 +8,12 @@ import model_gen as vae
 from tensorflow import keras
 from tensorflow.keras import layers
 
+time_step = 144
+
 thresh_dir = 'deploy/'
-model_dir = 'deploy/models/'
+model_dir = 'deploy/models_' + str(time_step) + '/'
 data_path = 'train_data/host/'
 
-time_step = 12
 
 def find_anom(host, dfs):
     problems = []
@@ -24,7 +25,7 @@ def find_anom(host, dfs):
         print('Host not found!')
         return
     df = dfs[key]
-    thresh = pd.read_csv(thresh_dir+'thresh.csv')
+    thresh = pd.read_csv(thresh_dir+'thresh_'+str(time_step)+'.csv')
 
     df_h = df[df.cmdb_id==host]
     for name in df_h['name'].unique():

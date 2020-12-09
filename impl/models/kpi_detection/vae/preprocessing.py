@@ -3,7 +3,8 @@ import pandas as pd
 import os
 
 from sklearn import preprocessing
-pd.options.mode.chained_assignment = None  # default='warn'
+
+pd.options.mode.chained_assignment = None  
 
 def load_dfs(data_path):
     dfs = {}
@@ -37,10 +38,10 @@ def get_kpi_train_data(df, time_step):
             df_host = normalise(df_host)
             x_train_list.append(gen_train_seq(df_host.values, time_step))
     if x_train_list == []:
-        print("Not enough data for timestep ", time_step, " in ", failures)
+        print("No host has enough data")
         return []
     x_train = np.concatenate(x_train_list)
-    print("Not enough data for timestep ", time_step, " in ", failures)
+    print("Not enough data for: ", failures)
     print(x_train.shape)
     return x_train
 

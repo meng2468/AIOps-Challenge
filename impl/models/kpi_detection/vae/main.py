@@ -6,15 +6,16 @@ import pandas as pd
 import preprocessing as pp
 import model_gen as vae
 
+time_step = 144
+
 data_path = 'train_data/host/'
-save_dir = 'deploy/models/'
+save_dir = 'deploy/models_' + str(time_step) + '/'
 thresh_dir = 'deploy/'
 
 dfs = pp.load_dfs(data_path)
 
 models = []
 histories = []
-time_step = 12
 
 def get_threshold(model, x_train):
     x_train_pred = model.predict(x_train)
@@ -30,12 +31,13 @@ for key in dfs:
         #Train and save the models
         df_n = df[df.name == name]
         x_train  = pp.get_kpi_train_data(df_n, time_step)
-
+        if x_train == []:
+            print(name, ' has no data! Skipping model generation!')
+            continue
         model, history = vae.save_model(x_train, save_dir, key, name)
         models.append(model)
         histories.append(history)
 
-        #Calculate and save the threshold
         thresh = {'KPI': key+'_'+name, 'thresh': get_threshold(model, x_train)}
         df_thresh = df_thresh.append(thresh, ignore_index=True)
-    df_thresh.to_csv(thresh_dir+'thresh.csv', index=False)
+    df_thresh.to_csv(thresh_dir+'thresh_'+str(time_step)+'.csv', index=False)
