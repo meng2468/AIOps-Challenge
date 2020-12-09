@@ -1,5 +1,7 @@
 import pandas as pd
 from sklearn.cluster import Birch
+import pickle
+import numpy as np
 
 class MicroRCA:
 
@@ -11,7 +13,9 @@ class MicroRCA:
         weights_alpha=0.55, 
         page_rank_alpha=0.85, 
         page_rank_max_iter=10000,
-        debug=False
+        model_checkoint='',
+        debug=False,
+        pickle_file='clustering_model.pickle'
     ):   
         # mean and std deviation of training duration
         self.smoothing_window = smoothing_window
@@ -27,6 +31,10 @@ class MicroRCA:
 
         self.debug = debug
 
+        # Load a pretrained model
+        with open(pickle_file, 'rb') as f:
+            self.model = pickle.load(f)
+
 
     def detect(self, traces, kpis):
         # Parse the traces and kpis
@@ -38,11 +46,9 @@ class MicroRCA:
         # 1 - find outlier in elapsed
         #   1.1 microRCA
 
-        # TODO Detect anomaly
-        # For each trace
-        # Clustering works by grouping hosts/services. Consider (host, service) pairs ?
-        # We need to have a time window of normal operation before the anomaly occured.
-        # Return bad traces
+        traces = self.get_anomalous_traces(traces)
+        print(traces, len(traces))
+
 
         # TODO Build attribute graph
         # Hosts + Service
@@ -65,6 +71,17 @@ class MicroRCA:
         # TODO Return the possible anomaly list
         return None
 
+    def get_anomalous_traces(self, tracelist):
+        """
+        tracelist - pd dataframe with traces
+
+        returns: iterable of traceids that are anomalous
+        """
+        # get roots (always OSB)
+        traces = tracelist[tracelist['callType'] == 'OSB']
+        predictions = self.model.predict(traces['elapsedTime'].values.reshape(-1,1))
+        indexes = np.where(predictions == 1)
+        return traces.iloc[indexes]['traceId'].unique()
 
     def parse_traces(self, traces):
         traces = dict(tuple(traces.sort_values('traceId').groupby('traceId')))
