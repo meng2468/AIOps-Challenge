@@ -6,7 +6,7 @@ import pandas as pd
 import preprocessing as pp
 import model_gen as vae
 
-time_step = 144
+time_step = 432
 
 data_path = 'train_data/host/'
 save_dir = 'deploy/models_' + str(time_step) + '/'
