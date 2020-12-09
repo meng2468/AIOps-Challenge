@@ -17,7 +17,7 @@ class MicroRCA:
         page_rank_max_iter=10000,
         model_checkoint='',
         debug=False,
-        pickle_file='clustering_model.pickle',
+        pickle_folder='models/',
     ):   
         # mean and std deviation of training duration
         self.smoothing_window = smoothing_window
@@ -34,7 +34,7 @@ class MicroRCA:
         self.debug = debug
 
         # Load a pretrained model
-        with open(pickle_file, 'rb') as f:
+        with open(pickle_folder + 'osb_001_OSB_cluster_model.pickle', 'rb') as f:
             self.model = pickle.load(f)
 
 
@@ -49,7 +49,7 @@ class MicroRCA:
         #   1.1 microRCA
 
         traces = self.get_anomalous_traces(traces)
-        # print(traces, len(traces))
+        print(traces, len(traces))
         # print(parsed_traces[traces[0]].head())
         # print('Unique services in trace:', len(parsed_traces[traces[0]]['serviceName'].unique()))
 
@@ -108,7 +108,7 @@ class MicroRCA:
         # get roots (always OSB)
         traces = tracelist[tracelist['callType'] == 'OSB']
         predictions = self.model.predict(traces['elapsedTime'].values.reshape(-1,1))
-        indexes = np.where(predictions == 1)
+        indexes = np.where(predictions != self.model.anomaly_index)
         return traces.iloc[indexes]['traceId'].unique()
 
     def parse_traces(self, traces):
