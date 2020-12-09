@@ -62,8 +62,10 @@ class MicroRCA:
         # TODO Build attribute graph 
         # Hosts + Service
         # Each service connects to all the services it communicates with and all hosts it connects to (no need to differentiate!)
-        DG = self.trace_graph(parsed_traces[traces[0]], visualize=True)
-
+        DG = nx.DiGraph()
+        for trace in traces:
+            DG = self.trace_graph(parsed_traces[trace], DG, visualize=False)
+        
         # TODO Extract Subgraph
         # Find anomalous nodes (high elapsed time)
         #           We can use clustering for that
@@ -107,8 +109,8 @@ class MicroRCA:
     def anomalus_subgraph(self, DirectedGraph, anomalies, ):
         pass
 
-    def trace_graph(self, trace, visualize=False):
-        DG = nx.DiGraph()
+    def trace_graph(self, trace, prev_graph, visualize=False):
+        DG = nx.DiGraph(prev_graph)
         
         hosts = trace['cmdb_id'].unique()
         services = trace['serviceName'].unique()
