@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import os
 import re
 
+from pprint import pprint
+
 class MicroRCA:
 
     def __init__(self,  
@@ -49,9 +51,9 @@ class MicroRCA:
                     self.detectors[key] = pickle.load(f)
 
 
-    def detect(self, traces, kpis, visualize=False):
+    def detect(self, traces_df, kpis, visualize=False):
         # Parse the traces and kpis
-        parsed_traces = self.parse_traces(traces)
+        parsed_traces = self.parse_traces(traces_df)
         
         # FIXME possible case where system doesn't answer for a long time and wasn't called
 
@@ -59,7 +61,7 @@ class MicroRCA:
         # 1 - find outlier in elapsed
         #   1.1 microRCA
 
-        traces = self.get_anomalous_traces(traces)
+        traces = self.get_anomalous_traces(traces_df)
         print(traces, len(traces))
         print(self.detectors['osb_001OSB'].anomaly_index)
         # print(parsed_traces[traces[0]].head())
@@ -99,7 +101,7 @@ class MicroRCA:
         # Extract anomalous nodes 
         # Create subgraph with anomalous nodes
         # Add nodes that are connected to these anomalous nodes
-        anomaly_DG = self.get_anomalous_graph(DG, traces, parsed_traces)
+        anomaly_DG = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
 
         # TODO Faulty service localization
         # Update weights of anomalous graph
@@ -173,7 +175,7 @@ class MicroRCA:
 
         return DG
 
-    def get_anomalous_graph(self, graph, anomalousids, traces):
+    def get_anomalous_graph(self, graph, anomalousids, traces, trace_df):
         anomalous_nodes = set()
         
         def detect_nodes(row):
@@ -188,10 +190,33 @@ class MicroRCA:
             trace = traces[id]
             trace.apply(detect_nodes, axis=1)
 
-        print(anomalous_nodes)
-        # construct anomalous graph
-        # anomalous nodes + all connections to them
-        return
+        anomalous_graph = nx.DiGraph()
+
+        for node in anomalous_nodes:
+            if any(map(lambda n: n in anomalous_nodes, graph.predecessors(node))):
+                anomalous_graph.add_node(node, status='anomaly', type=graph.nodes[node]['type'])
+            
+        anomalous_nodes = list(anomalous_graph.nodes)
+        for node in anomalous_nodes:
+            for n in graph.predecessors(node):
+                if n not in anomalous_graph.nodes:
+                    anomalous_graph.add_node(n, status='normal', **graph.nodes[n])
+            
+            for n in graph.successors(node):
+                if n not in anomalous_graph.nodes:
+                    anomalous_graph.add_node(n, status='normal', **graph.nodes[n])
+            
+            anomalous_graph.add_edges_from(list(map(lambda x: x[::-1], graph.in_edges(node))))
+            anomalous_graph.add_edges_from(graph.out_edges(node))
+
+        
+        for node in anomalous_nodes:
+            avg = trace_df[trace_df['serviceName'] == node]['elapsedTime'].mean()
+            anomalous_graph.nodes[node]['rt_a'] = avg
+
+        pprint(anomalous_graph.nodes(data=True))
+
+        return anomalous_graph
 
 if __name__ == '__main__':
     # simulate usage from the upper model
