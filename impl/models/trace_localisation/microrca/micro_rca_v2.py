@@ -5,6 +5,9 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
+import os
+import re
+
 class MicroRCA:
 
     def __init__(self,  
@@ -33,9 +36,17 @@ class MicroRCA:
 
         self.debug = debug
 
-        # Load a pretrained model
-        with open(pickle_folder + 'osb_001_OSB_cluster_model.pickle', 'rb') as f:
-            self.model = pickle.load(f)
+        
+        files = os.listdir(pickle_folder)
+        self.detectors = {}
+        
+        for file in files:
+            m = re.search(r'(.+)_(.+)_cluster_model.pickle', file)        
+            if m:
+                groups = m.groups()
+                key = groups[0] + groups[1]
+                with open(pickle_folder + file, 'rb') as f:
+                    self.detectors[key] = pickle.load(f)
 
 
     def detect(self, traces, kpis, visualize=False):
@@ -50,6 +61,7 @@ class MicroRCA:
 
         traces = self.get_anomalous_traces(traces)
         print(traces, len(traces))
+        print(self.detectors['osb_001OSB'].anomaly_index)
         # print(parsed_traces[traces[0]].head())
         # print('Unique services in trace:', len(parsed_traces[traces[0]]['serviceName'].unique()))
 
@@ -107,8 +119,11 @@ class MicroRCA:
         """
         # get roots (always OSB)
         traces = tracelist[tracelist['callType'] == 'OSB']
-        predictions = self.model.predict(traces['elapsedTime'].values.reshape(-1,1))
-        indexes = np.where(predictions != self.model.anomaly_index)
+        model = self.detectors['osb_001OSB']
+
+        predictions = model.predict(traces['elapsedTime'].values.reshape(-1,1))
+        indexes = np.where(predictions != model.anomaly_index)
+        
         return traces.iloc[indexes]['traceId'].unique()
 
     def parse_traces(self, traces):
@@ -159,15 +174,21 @@ class MicroRCA:
         return DG
 
     def get_anomalous_graph(self, graph, anomalousids, traces):
+        anomalous_nodes = set()
+        
+        def detect_nodes(row):
+            # {k -> v} k = serviceName + callType 
+            model = self.detectors[row.loc['serviceName'] + row.loc['callType']]
+            prediction = model.predict(np.array(row['elapsedTime']).reshape(-1,1))
+            if prediction != model.anomaly_index: # anomaly_index is inverted. It signals the normal index!!!
+                anomalous_nodes.add(row.loc['serviceName'])
+
         # find anomalous nodes
-        # for i in anomalousids:
-        #     trace = traces[i]
-        #     groups = list(trace.groupby('pid'))
-        #     for group in groups:
-        #         # find parent 
-        #         parent = trace[trace['id'] == group[0]]['serviceName']
+        for id in anomalousids:
+            trace = traces[id]
+            trace.apply(detect_nodes, axis=1)
 
-
+        print(anomalous_nodes)
         # construct anomalous graph
         # anomalous nodes + all connections to them
         return
