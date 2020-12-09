@@ -10,6 +10,8 @@ import re
 
 from pprint import pprint
 
+from scipy.stats import pearsonr
+
 class MicroRCA:
 
     def __init__(self,  
@@ -95,13 +97,8 @@ class MicroRCA:
             nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
             plt.show()
 
-        # TODO Extract Subgraph
-        # Find anomalous nodes (high elapsed time)
-        #           We can use clustering for that
-        # Extract anomalous nodes 
-        # Create subgraph with anomalous nodes
-        # Add nodes that are connected to these anomalous nodes
-        anomaly_DG = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
+        # Extract anomalous subgraph
+        anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
 
         # TODO Faulty service localization
         # Update weights of anomalous graph
@@ -109,6 +106,8 @@ class MicroRCA:
         # Get personalization vector (Transition Probability Matrix)
         # Reverse the service-service edges
         # Apply pagerank
+        parsed_kpis = self.parse_kpis(kpis)
+        result = self.get_fault_service(anomaly_DG, anomalous_edges, parsed_kpis)
 
         # TODO Return the possible anomaly list
         return None
@@ -137,7 +136,8 @@ class MicroRCA:
         return traces 
 
     def parse_kpis(self, kpis):
-        pass
+        return dict(tuple(kpis.groupby('cmdb_id')))
+
 
     def anomalus_subgraph(self, DirectedGraph, anomalies, ):
         pass
@@ -191,10 +191,20 @@ class MicroRCA:
             trace.apply(detect_nodes, axis=1)
 
         anomalous_graph = nx.DiGraph()
-
+        
+        anomalous_edges = []
         for node in anomalous_nodes:
-            if any(map(lambda n: n in anomalous_nodes, graph.predecessors(node))):
+            changed = False
+            #if any(map(lambda n: n in anomalous_nodes, graph.predecessors(node))):
+            for parent in graph.predecessors(node):
+                if parent in anomalous_nodes:
+                    changed = True
+                    anomalous_edges.append((parent, node))
+            
+            if changed:
                 anomalous_graph.add_node(node, status='anomaly', type=graph.nodes[node]['type'])
+
+                    
             
         anomalous_nodes = list(anomalous_graph.nodes)
         for node in anomalous_nodes:
@@ -210,13 +220,52 @@ class MicroRCA:
             anomalous_graph.add_edges_from(graph.out_edges(node))
 
         
-        for node in anomalous_nodes:
-            avg = trace_df[trace_df['serviceName'] == node]['elapsedTime'].mean()
-            anomalous_graph.nodes[node]['rt_a'] = avg
+        for node in anomalous_graph.nodes:
+            if anomalous_graph.nodes[node]['type'] == 'service':
+                avg = trace_df[trace_df['serviceName'] == node]['elapsedTime'].mean()
+                anomalous_graph.nodes[node]['rt'] = avg
 
-        pprint(anomalous_graph.nodes(data=True))
+        return anomalous_graph, anomalous_edges
 
-        return anomalous_graph
+    def get_fault_service(self, graph, anomalous_edges, kpis):
+        for v in graph.nodes:
+            if graph.nodes[v]['status'] != 'anomaly':
+                continue
+            in_val = 0
+            for edge in graph.in_edges(v):
+                src, _ = edge
+
+                weight = self.weights_alpha if edge in anomalous_edges else pearsonr([graph.nodes[v]['rt']], [graph.nodes[src]['rt']])
+                in_val += weight
+                new_edge = (src, v, {'weight': weight})
+                
+                nx.set_edge_attributes(graph, {(src, v) : {'weight' : weight}})
+            
+            in_val /= graph.in_degree(v)
+
+            for edge in graph.out_edges(v):
+                _, dst = edge
+                if graph.nodes[dst]['type'] == 'service':
+                    val = pearsonr([graph.nodes[v]['rt']], [graph.nodes[dst]['rt']])
+                else:
+                    max_corr = 0
+                    l = []
+                    for key in kpis:
+                        kpi = kpis[key]
+                        serie = kpi['value'].normalize()
+                        corr = pearsonr(serie, [graph.nodes[v]['rt']])
+                        l.append(corr)
+
+                    max_corr = max(l)
+                    val = in_val * max_corr
+
+                nx.set_edge_attributes(graph, {(v, src) : {'weight' : val}})
+            
+        
+        pprint(list(graph.edges(data=True)))
+
+                
+                    
 
 if __name__ == '__main__':
     # simulate usage from the upper model
