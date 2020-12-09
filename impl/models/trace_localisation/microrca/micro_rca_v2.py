@@ -17,7 +17,7 @@ class MicroRCA:
         page_rank_max_iter=10000,
         model_checkoint='',
         debug=False,
-        pickle_file='clustering_model.pickle'
+        pickle_file='clustering_model.pickle',
     ):   
         # mean and std deviation of training duration
         self.smoothing_window = smoothing_window
@@ -38,7 +38,7 @@ class MicroRCA:
             self.model = pickle.load(f)
 
 
-    def detect(self, traces, kpis):
+    def detect(self, traces, kpis, visualize=False):
         # Parse the traces and kpis
         parsed_traces = self.parse_traces(traces)
         
@@ -64,15 +64,31 @@ class MicroRCA:
         # Each service connects to all the services it communicates with and all hosts it connects to (no need to differentiate!)
         DG = nx.DiGraph()
         for trace in traces:
-            DG = self.trace_graph(parsed_traces[trace], DG, visualize=False)
+            DG = self.trace_graph(parsed_traces[trace], DG)
         
+        if visualize:
+            print(DG.nodes(data=True), len(DG.nodes()))
+
+            plt.figure(figsize=(9,9))
+            pos = nx.spring_layout(DG)
+            nx.draw(DG, pos, with_labels=True, cmap=plt.get_cmap('jet'), node_size=0, arrows=True)
+
+            # nx.draw_networkx_nodes(DG, pos, nodelist=hosts, node_color="r", node_size=1500)
+            # nx.draw_networkx_nodes(DG, pos, nodelist=services, node_color="b", node_size=500)
+            nx.draw_networkx_edges(DG, pos, width=1.0, alpha=0.5)
+
+            labels = nx.get_edge_attributes(DG, 'weight')
+            nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
+            plt.show()
+
         # TODO Extract Subgraph
         # Find anomalous nodes (high elapsed time)
         #           We can use clustering for that
         # Extract anomalous nodes 
         # Create subgraph with anomalous nodes
         # Add nodes that are connected to these anomalous nodes
-        
+        anomaly_DG = self.get_anomalous_graph(DG, traces, parsed_traces)
+
         # TODO Faulty service localization
         # Update weights of anomalous graph
         #           Use cases from the paper
@@ -140,23 +156,21 @@ class MicroRCA:
             # Current service to its host
             DG.add_edge(service, host)
 
-        if visualize:
-            print(DG.nodes(data=True), len(DG.nodes()))
-
-            plt.figure(figsize=(9,9))
-            pos = nx.spring_layout(DG)
-            nx.draw(DG, pos, with_labels=True, cmap=plt.get_cmap('jet'), node_size=0, arrows=True)
-
-            nx.draw_networkx_nodes(DG, pos, nodelist=hosts, node_color="r", node_size=1500)
-            nx.draw_networkx_nodes(DG, pos, nodelist=services, node_color="b", node_size=500)
-            nx.draw_networkx_edges(DG, pos, width=1.0, alpha=0.5)
-
-            labels = nx.get_edge_attributes(DG, 'weight')
-            nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
-            plt.show()
-
         return DG
 
+    def get_anomalous_graph(self, graph, anomalousids, traces):
+        # find anomalous nodes
+        # for i in anomalousids:
+        #     trace = traces[i]
+        #     groups = list(trace.groupby('pid'))
+        #     for group in groups:
+        #         # find parent 
+        #         parent = trace[trace['id'] == group[0]]['serviceName']
+
+
+        # construct anomalous graph
+        # anomalous nodes + all connections to them
+        return
 
 if __name__ == '__main__':
     # simulate usage from the upper model
@@ -172,6 +186,6 @@ if __name__ == '__main__':
 
     microRCA = MicroRCA()
 
-    res = microRCA.detect(traces, kpis)
+    res = microRCA.detect(traces, kpis, visualize=True)
 
     print(f'Result {res}')
