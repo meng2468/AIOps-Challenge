@@ -38,5 +38,4 @@ for key in dfs:
         #Calculate and save the threshold
         thresh = {'KPI': key+'_'+name, 'thresh': get_threshold(model, x_train)}
         df_thresh = df_thresh.append(thresh, ignore_index=True)
-
-df_thresh.to_csv(thresh_dir+'thresh.csv', index=False)
+    df_thresh.to_csv(thresh_dir+'thresh.csv', index=False)
