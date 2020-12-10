@@ -5,6 +5,8 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from collections import defaultdict
+
 import os
 import re
 
@@ -109,9 +111,14 @@ class MicroRCA:
         # Reverse the service-service edges
         # Apply pagerank
         parsed_kpis = self.parse_kpis(kpis)
+        
         result = self.get_fault_service(anomaly_DG, anomalous_edges, traces_df, parsed_kpis)
+        # result = list(map(lambda x: x[0], filter(lambda x: x[1] > 0, result)))
 
-        # TODO Return the possible anomaly list
+        # hosts = []
+        # for v in result:
+        #     hosts.append(set(map(lambda x: x[1], filter(lambda x: anomaly_DG.nodes[x[1]]['type']=='host', anomaly_DG.out_edges(v)))))
+
         return result
 
     def get_anomalous_traces(self, tracelist):
@@ -306,8 +313,23 @@ class MicroRCA:
             personalization=personalization,
             max_iter=self.page_rank_max_iter
         )
-        scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return scores
+        scores = sorted(filter(lambda x: x[1] > 0, scores.items()), key=lambda x: x[1], reverse=True)
+
+        scores = defaultdict(int, scores)
+
+        # scores = ((service, %))
+        hosts = list(filter(lambda x: x[1]['type'] == 'host', graph.nodes(data=True)))
+        host_scores = []
+        for host in hosts:
+            hostname = host[0]
+            # weight, src
+            weights = [(graph.get_edge_data(*edge)['weight'], edge[0]) for edge in graph.in_edges(hostname)]
+            val = sum(map(lambda x: x[0] * scores[x[1]], weights))
+            host_scores.append((hostname, val))
+    
+        max_score = max(map(lambda x: x[1], host_scores))
+
+        return set(map(lambda x: x[0], filter(lambda x: x[1] == max_score, host_scores)))
                 
                     
 
