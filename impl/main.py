@@ -68,9 +68,9 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
             # For data['callType']
             #  in ['CSF', 'OSB', 'RemoteProcess', 'FlyRemote', 'LOCAL']
             self.serviceName = [data['serviceName']]
-        if 'dsName' in data:
+        if 'dsName' in data and data['callType'] == 'JDBC':
             # For data['callType'] in ['JDBC', 'LOCAL']
-            self.dsName = [data['dsName']]
+            self.serviceName = [data['dsName']]
 
     def to_dataframe(self):
         return pd.DataFrame.from_dict(self.__dict__)
@@ -110,7 +110,7 @@ def main():
             # data['body'].keys() is supposed to be
             # ['os_linux', 'db_oracle_11g', 'mw_redis', 'mw_activemq',
             #  'dcos_container', 'dcos_docker']
-            new_df = pd.concat(map(lambda x: x.to_dataframe(), [PlatformIndex(item) for item in data['body'][stack] for stack in data['body']]))
+            new_df = pd.concat(map(lambda x: x.to_dataframe(), [PlatformIndex(item) for stack in data['body'] for item in data['body'][stack]]))
             df['kpi'] = pd.concat([df['kpi'],new_df])
 
         elif message.topic == 'business-index':
@@ -123,12 +123,11 @@ def main():
             for key in df:
                 dataframe = df[key]
                 dataframe = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
-            
+            print(df)
         else:  # message.topic == 'trace'
             new_df = Trace(data).to_dataframe() 
             df['trace'] = pd.concat([df['trace'],new_df])
 
-        print(i, message.topic, timestamp)
 
 
 if __name__ == '__main__':
