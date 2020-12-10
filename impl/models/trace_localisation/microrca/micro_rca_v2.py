@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import os
 import re
 
+import math
+
 from pprint import pprint
 
 from scipy.stats import pearsonr
@@ -107,7 +109,7 @@ class MicroRCA:
         # Reverse the service-service edges
         # Apply pagerank
         parsed_kpis = self.parse_kpis(kpis)
-        result = self.get_fault_service(anomaly_DG, anomalous_edges, parsed_kpis)
+        result = self.get_fault_service(anomaly_DG, anomalous_edges, traces_df, parsed_kpis)
 
         # TODO Return the possible anomaly list
         return None
@@ -227,7 +229,7 @@ class MicroRCA:
 
         return anomalous_graph, anomalous_edges
 
-    def get_fault_service(self, graph, anomalous_edges, kpis):
+    def get_fault_service(self, graph, anomalous_edges, traces, kpis):
         for v in graph.nodes:
             if graph.nodes[v]['status'] != 'anomaly':
                 continue
@@ -235,10 +237,13 @@ class MicroRCA:
             for edge in graph.in_edges(v):
                 src, _ = edge
 
-                weight = self.weights_alpha if edge in anomalous_edges else pearsonr([graph.nodes[v]['rt']], [graph.nodes[src]['rt']])
+                weight = self.weights_alpha if edge in anomalous_edges else traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == src]['elapsedTime'])
+                if math.isnan(weight): # in case kpis don't vary
+                    weight = 0
+
                 in_val += weight
                 new_edge = (src, v, {'weight': weight})
-                
+            
                 nx.set_edge_attributes(graph, {(src, v) : {'weight' : weight}})
             
             in_val /= graph.in_degree(v)
@@ -246,19 +251,22 @@ class MicroRCA:
             for edge in graph.out_edges(v):
                 _, dst = edge
                 if graph.nodes[dst]['type'] == 'service':
-                    val = pearsonr([graph.nodes[v]['rt']], [graph.nodes[dst]['rt']])
+                    val = traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == dst]['elapsedTime'])
+                    if math.isnan(val): # in case kpis don't vary
+                        val = 0
                 else:
                     max_corr = 0
                     l = []
                     for key in kpis:
                         kpi = kpis[key]
-                        serie = kpi['value'].normalize()
-                        corr = pearsonr(serie, [graph.nodes[v]['rt']])
-                        l.append(corr)
+                        serie = kpi['value']#.normalize()
+                        corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
+                        if math.isnan(corr): # in case kpis don't vary
+                            corr = 0
+                        l.append(abs(corr))
 
                     max_corr = max(l)
                     val = in_val * max_corr
-
                 nx.set_edge_attributes(graph, {(v, src) : {'weight' : val}})
             
         
