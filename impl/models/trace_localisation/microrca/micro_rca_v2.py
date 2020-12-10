@@ -66,8 +66,8 @@ class MicroRCA:
         #   1.1 microRCA
 
         traces = self.get_anomalous_traces(traces_df)
-        print(traces, len(traces))
-        print(self.detectors['osb_001OSB'].anomaly_index)
+        # print(traces, len(traces))
+        # print(self.detectors['osb_001OSB'].anomaly_index)
         # print(parsed_traces[traces[0]].head())
         # print('Unique services in trace:', len(parsed_traces[traces[0]]['serviceName'].unique()))
 
@@ -257,8 +257,10 @@ class MicroRCA:
                 else:
                     max_corr = 0
                     l = []
-                    for key in kpis:
-                        kpi = kpis[key]
+                    #keys = traces[traces['serviceName'] == v]['cmdb_id']
+                    keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
+                    for key in keys:
+                        kpi = kpis[key[1]]
                         serie = kpi['value']#.normalize()
                         corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
                         if math.isnan(corr): # in case kpis don't vary
@@ -282,8 +284,10 @@ class MicroRCA:
             # get max correlation value
             max_corr = 0
             l = []
-            for key in kpis:
-                kpi = kpis[key]
+            #keys = traces[traces['serviceName'] == v]['cmdb_id'].unique()
+            keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
+            for key in keys:
+                kpi = kpis[key[1]]
                 serie = kpi['value']#.normalize()
                 corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
                 if math.isnan(corr): # in case kpis don't vary
@@ -317,7 +321,7 @@ if __name__ == '__main__':
     traces = pd.read_csv('data/small_trace.csv').drop(['Unnamed: 0'], axis=1)
     kpis = pd.read_csv('data/small_kpis.csv').drop(['Unnamed: 0'], axis=1)
 
-    print(traces)
+    # print(traces)
 
     microRCA = MicroRCA()
 
