@@ -112,7 +112,7 @@ class MicroRCA:
         result = self.get_fault_service(anomaly_DG, anomalous_edges, traces_df, parsed_kpis)
 
         # TODO Return the possible anomaly list
-        return None
+        return result
 
     def get_anomalous_traces(self, tracelist):
         """
@@ -267,11 +267,43 @@ class MicroRCA:
 
                     max_corr = max(l)
                     val = in_val * max_corr
-                nx.set_edge_attributes(graph, {(v, src) : {'weight' : val}})
-            
+                nx.set_edge_attributes(graph, {(v, dst) : {'weight' : val}})
         
-        pprint(list(graph.edges(data=True)))
+        personalization = {}
+        for v in graph.nodes:
+            if graph.nodes[v]['status'] != 'anomaly':
+                continue    
+            
+            #get avg weight
+            vals = [graph.get_edge_data(*edge)['weight'] for edge in graph.out_edges(v)] #all edges
+            avg = sum(vals) / len(vals)
 
+
+            # get max correlation value
+            max_corr = 0
+            l = []
+            for key in kpis:
+                kpi = kpis[key]
+                serie = kpi['value']#.normalize()
+                corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
+                if math.isnan(corr): # in case kpis don't vary
+                    corr = 0
+                l.append(abs(corr))
+                max_corr = max(l)
+            
+            val = avg * max_corr
+            personalization[v] = val / graph.degree(v) # why do they do this in the original code?
+                
+        reversed_graph = graph.reverse(copy=True)
+
+        scores = nx.pagerank(
+            reversed_graph, 
+            alpha=self.page_rank_alpha,
+            personalization=personalization,
+            max_iter=self.page_rank_max_iter
+        )
+        scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return scores
                 
                     
 
