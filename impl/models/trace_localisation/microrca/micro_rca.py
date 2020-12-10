@@ -1,31 +1,24 @@
-# import requests
-import argparse
-import csv
-import datetime
-import os
-import time
-
-import matplotlib.pyplot as plt
-import networkx as nx
-import numpy as np
 import pandas as pd
-from sklearn import preprocessing
 from sklearn.cluster import Birch
+import pickle
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 
+from collections import defaultdict
 
-class MicroRCA():
-    """
-    Class implementing the MicroRCA algorithm as described in:
+import os
+import re
 
-    Li Wu, Johan Tordsson, Erik Elmroth, Odej Kao.
-    MicroRCA: Root Cause Localization of Performance Issues in Microservices
-    IEEE/IFIP Network Operations and Management Symposium (NOMS), 20-24 April 2020, Budapest, Hungary
-    
-    """
-    def __init__(self, 
-        data_dir,
-        faults_type, 
-        targets, 
+import math
+
+from pprint import pprint
+
+from scipy.stats import pearsonr
+
+class MicroRCA:
+
+    def __init__(self,  
         smoothing_window=12, 
         min_periods=1, 
         branching_factor=50, 
@@ -33,29 +26,11 @@ class MicroRCA():
         weights_alpha=0.55, 
         page_rank_alpha=0.85, 
         page_rank_max_iter=10000,
-        debug=False
-    ):
-        """
-        - Input parameters
-        faults_type (list): KPIs to analyze for anomalies
-        targets (list): List of services
-        smoothing_window (int): Parameter for the windowing in BIRCH preprocessing (default = 12)
-        min_periods (int): Minute period for the windowing in BIRCH preprocessing (default = 1)
-        branching_factor (int): Parameter for the BIRCH algorithm (default = 50)
-        ad_threshold (float): Threshold for the anomaly detection step of BIRCH algorithm
-        alpha (float): Confidence parameter for the weights of edges between 2 abnormal nodes
-
-        - Example:
-        faults_type = ['svc_latency', 'service_cpu', 'service_memory']
-        targets = ['front-end', 'catalogue', 'orders', 'user', 'carts', 'payment', 'shipping']
-
-        mrca = MicroRCA(faults_type, targets)
-
-        """
-        self.data_dir = data_dir
-        self.faults_type = faults_type
-        self.targets = targets
-        
+        model_checkoint='',
+        debug=False,
+        pickle_folder='models/',
+    ):   
+        # mean and std deviation of training duration
         self.smoothing_window = smoothing_window
         self.min_periods = min_periods
 
@@ -69,320 +44,309 @@ class MicroRCA():
 
         self.debug = debug
 
-
-    def detect(self, faults_type, target):
-        faults_name = os.path.join(self.data_dir, faults_type + '_' + target)
-
-        # Setp 1: get the response times 
-        latency_df = self.rt_invocations(faults_name)
-
-        # Step 2: Get anomalies from the clustering with BIRCH
-        anomaly_nodes = []
-        anomalies = self.birch_ad_with_smoothing(latency_df)
-        for anomaly in anomalies:
-            edge = anomaly.split('_')
-            anomaly_nodes.append(edge[1])
-        anomaly_nodes = set(anomaly_nodes)
-
-        # Step 3: Build the graph from the node lists
-        DG = self.build_graph(faults_name, visualize=self.debug)
-
-        # Step 4: Extract the anomalus subgraph
-        # anomaly_graph, personalization = self.anomaly_subgraph(DG, anomaly_nodes, latency_df, faults_name, self.weights_alpha)
-        # Original line had "anomalies", shouldnt it be "anomaly_nodes" set?
-        anomaly_graph, personalization = self.anomaly_subgraph(DG, anomalies, latency_df, faults_name, self.weights_alpha) 
-      
-        # Step 5: Calculate the anomaly score by running PageRank
-        anomaly_scores = self.anomaly_score(anomaly_graph, personalization)
-        return anomaly_scores
-
-    def rt_invocations(self, faults_name):
-        latency_filename = faults_name + '_latency_source_50.csv'  # inbound
-        latency_df_source = pd.read_csv(latency_filename) 
-        # latency_df_source['unknown_front-end'] = 0
         
-        latency_filename = faults_name + '_latency_destination_50.csv' # outbound
-        latency_df_destination = pd.read_csv(latency_filename) 
+        files = os.listdir(pickle_folder)
+        self.detectors = {}
         
-        latency_df = latency_df_destination.add(latency_df_source)    
-
-        #################################################
-        # FIXME: The data provided in the original repo is messed up, remove this filtering with our data
-        latency_df = latency_df[['orders_user']]
-        #################################################
-
-        return latency_df
-
-    
-    def birch_ad_with_smoothing(self, latency_df):
-        if(latency_df is None):
-            latency_df = self.rt_invocations()
-
-        anomalies = []
-        for svc, latency in latency_df.iteritems():
-            # No anomaly detection in db  # TODO maybe change this to detect anomalies in all services
-            if svc != 'timestamp' and 'Unnamed' not in svc and 'rabbitmq' not in svc and 'db' not in svc:
-                latency = latency.rolling(window=self.smoothing_window, min_periods=1).mean()
-                x = np.array(latency)
-                x = np.where(np.isnan(x), 0, x)
-                normalized_x = preprocessing.normalize([x])
-
-                X = normalized_x.reshape(-1,1)
-
-                brc = Birch(
-                    branching_factor=self.branching_factor, 
-                    n_clusters=None, 
-                    threshold=self.ad_threshold, 
-                    compute_labels=True
-                )
-                brc.fit(X)
-                brc.predict(X)
-
-                labels = brc.labels_
-    #            centroids = brc.subcluster_centers_
-                n_clusters = np.unique(labels).size
-                if n_clusters > 1:
-                    anomalies.append(svc)
-        return anomalies
+        for file in files:
+            m = re.search(r'(.+)_(.+)_cluster_model.pickle', file)        
+            if m:
+                groups = m.groups()
+                key = groups[0] + groups[1]
+                with open(pickle_folder + file, 'rb') as f:
+                    self.detectors[key] = pickle.load(f)
 
 
-    def build_graph(self, faults_name, visualize=False):
-        # build the attributed graph 
-        # input: prefix of the file
-        # output: attributed graph
-
-        filename = faults_name + '_mpg.csv'
-        df = pd.read_csv(filename)
+    def detect(self, traces_df, kpis, visualize=False):
+        # Parse the traces and kpis
+        parsed_traces = self.parse_traces(traces_df)
         
+        # FIXME possible case where system doesn't answer for a long time and wasn't called
+
+        #check for anomaly
+        # 1 - find outlier in elapsed
+        #   1.1 microRCA
+
+        traces = self.get_anomalous_traces(traces_df)
+        # print(traces, len(traces))
+        # print(self.detectors['osb_001OSB'].anomaly_index)
+        # print(parsed_traces[traces[0]].head())
+        # print('Unique services in trace:', len(parsed_traces[traces[0]]['serviceName'].unique()))
+
+        # Should we iterate here over each trace in traces or consider them all together?
+        # for trace_id in traces:
+        #   trace = parsed_traces[trace_id]
+        #   DG = self.trace_graph(trace)
+        #   ... [Perform the rest of the steps]
+
+        # TODO Build attribute graph 
+        # Hosts + Service
+        # Each service connects to all the services it communicates with and all hosts it connects to (no need to differentiate!)
         DG = nx.DiGraph()
-        for index, row in df.iterrows():
-            source = row['source']
-            destination = row['destination']
-            # if 'rabbitmq' not in source and 'rabbitmq' not in destination and 'db' not in destination and 'db' not in source:
-            DG.add_edge(source, destination)
-
-        for node in DG.nodes():
-            if 'kubernetes' in node: # TODO adapt to our case for hosts / services
-                DG.nodes[node]['type'] = 'host'
-            else:
-                DG.nodes[node]['type'] = 'service'
-       
+        for trace in traces:
+            DG = self.trace_graph(parsed_traces[trace], DG)
+        
         if visualize:
-            print(DG.nodes(data=True))
-                        
+            print(DG.nodes(data=True), len(DG.nodes()))
+
             plt.figure(figsize=(9,9))
-            nx.draw(DG, with_labels=True, font_weight='bold')
             pos = nx.spring_layout(DG)
-            nx.draw(DG, pos, with_labels=True, cmap = plt.get_cmap('jet'), node_size=1500, arrows=True)
+            nx.draw(DG, pos, with_labels=True, cmap=plt.get_cmap('jet'), node_size=0, arrows=True)
+
+            # nx.draw_networkx_nodes(DG, pos, nodelist=hosts, node_color="r", node_size=1500)
+            # nx.draw_networkx_nodes(DG, pos, nodelist=services, node_color="b", node_size=500)
+            nx.draw_networkx_edges(DG, pos, width=1.0, alpha=0.5)
+
             labels = nx.get_edge_attributes(DG, 'weight')
             nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
             plt.show()
-                    
-        return DG 
+
+        # Extract anomalous subgraph
+        anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
+
+        # TODO Faulty service localization
+        # Update weights of anomalous graph
+        #           Use cases from the paper
+        # Get personalization vector (Transition Probability Matrix)
+        # Reverse the service-service edges
+        # Apply pagerank
+        parsed_kpis = self.parse_kpis(kpis)
+        
+        result = self.get_fault_service(anomaly_DG, anomalous_edges, traces_df, parsed_kpis)
+        # result = list(map(lambda x: x[0], filter(lambda x: x[1] > 0, result)))
+
+        # hosts = []
+        # for v in result:
+        #     hosts.append(set(map(lambda x: x[1], filter(lambda x: anomaly_DG.nodes[x[1]]['type']=='host', anomaly_DG.out_edges(v)))))
+
+        return result
+
+    def get_anomalous_traces(self, tracelist):
+        """
+        tracelist - pd dataframe with traces
+
+        returns: iterable of traceids that are anomalous
+        """
+        # get roots (always OSB)
+        traces = tracelist[tracelist['callType'] == 'OSB']
+        model = self.detectors['osb_001OSB']
+
+        predictions = model.predict(traces['elapsedTime'].values.reshape(-1,1))
+        indexes = np.where(predictions != model.anomaly_index)
+        
+        return traces.iloc[indexes]['traceId'].unique()
+
+    def parse_traces(self, traces):
+        traces = dict(tuple(traces.sort_values('traceId').groupby('traceId')))
+        # for key in traces:
+        #     df = traces[key].sort_values('startTime')
+        #     print(df['elapsedTime'].iloc[0], df['traceId'].iloc[0], sep='\t')
+        # i = 1
+        return traces 
+
+    def parse_kpis(self, kpis):
+        return dict(tuple(kpis.groupby('cmdb_id')))
 
 
-    def svc_personalization(svc, anomaly_graph, baseline_df, faults_name):
-        filename = faults_name + '_' + svc + '.csv'
-        df = pd.read_csv(filename)
-        ctn_cols = ['ctn_cpu', 'ctn_network', 'ctn_memory']
-        max_corr = 0.01
-        metric = 'ctn_cpu'
-        for col in ctn_cols:
-            temp = abs(baseline_df[svc].corr(df[col]))     
-            if temp > max_corr:
-                max_corr = temp
-                metric = col
+    def anomalus_subgraph(self, DirectedGraph, anomalies, ):
+        pass
 
-        edges_weight_avg = 0.0
-        num = 0
-        for u, v, data in anomaly_graph.in_edges(svc, data=True):
-            num = num + 1
-            edges_weight_avg = edges_weight_avg + data['weight']
+    def trace_graph(self, trace, prev_graph, visualize=False):
+        DG = nx.DiGraph(prev_graph)
+        
+        hosts = trace['cmdb_id'].unique()
+        services = trace['serviceName'].unique()
 
-        for u, v, data in anomaly_graph.out_edges(svc, data=True):
-            if anomaly_graph.nodes[v]['type'] == 'service':
-                num = num + 1
-                edges_weight_avg = edges_weight_avg + data['weight']
+        # print(30*'-')
+        # print(hosts, len(hosts))
+        # print(services, len(services))
+        # print(30*'-')
 
-        edges_weight_avg  = edges_weight_avg / num
+        # Add nodes to the graph
+        for node in hosts:
+            DG.add_node(node, type='host')
+        
+        for node in services:
+            DG.add_node(node, type='service')
+  
+        # Add edges to the graph
+        for _, row in trace.iterrows():
+            parent = trace[trace['id'] == row['pid']]['serviceName']
+            service = row['serviceName']
+            host = row['cmdb_id']
+        
+            # Parent service to current service
+            if(len(parent)): # Parent may be empty
+                DG.add_edge(parent.values[0], service)
+         
+            # Current service to its host
+            DG.add_edge(service, host)
 
-        personalization = edges_weight_avg * max_corr
+        return DG
 
-        return personalization, metric    
+    def get_anomalous_graph(self, graph, anomalousids, traces, trace_df):
+        anomalous_nodes = set()
+        
+        def detect_nodes(row):
+            # {k -> v} k = serviceName + callType 
+            model = self.detectors[row.loc['serviceName'] + row.loc['callType']]
+            prediction = model.predict(np.array(row['elapsedTime']).reshape(-1,1))
+            if prediction != model.anomaly_index: # anomaly_index is inverted. It signals the normal index!!!
+                anomalous_nodes.add(row.loc['serviceName'])
 
-    
-    def node_weight(self, svc, anomaly_graph, baseline_df, faults_name):
-        #Get the average weight of the in_edges
-        in_edges_weight_avg = 0.0
-        num = 0
-        for u, v, data in anomaly_graph.in_edges(svc, data=True):
-            # TODO: cant we just check the degrees here?
-            num = num + 1
-            in_edges_weight_avg = in_edges_weight_avg + data['weight']
-        if num > 0:
-            in_edges_weight_avg  = in_edges_weight_avg / num 
+        # find anomalous nodes
+        for id in anomalousids:
+            trace = traces[id]
+            trace.apply(detect_nodes, axis=1)
 
-        filename = faults_name + '_' + svc + '.csv'
-        df = pd.read_csv(filename)
-        node_cols = ['node_cpu', 'node_network', 'node_memory']
-        max_corr = 0.01
-        metric = 'node_cpu'
-        for col in node_cols:
-            temp = abs(baseline_df[svc].corr(df[col]))
-            if temp > max_corr:
-                max_corr = temp
-                metric = col
-        data = in_edges_weight_avg * max_corr
-        return data, metric
-
-
-    def anomaly_subgraph(self, DG, anomalies, latency_df, faults_name, visualize=False):
-        # Get the anomalous subgraph
-        # input: 
-        #   DG: attributed graph
-        #   anomlies: anoamlous service invocations
-        #   latency_df: service invocations from data collection
-        #   agg_latency_dff: aggregated service invocation
-        #   faults_name: prefix of csv file
-        #   alpha: weight of the anomalous edge
-        #
-        # output:
-        #   anomalous graph
-        #   personalization
-
-        if DG == []:
-            DG = self.build_graph(faults_name)
-
-        # Get reported anomalous nodes
-
-        # Added the anomalous_ prefix to variables 
+        anomalous_graph = nx.DiGraph()
+        
         anomalous_edges = []
-        anomalous_nodes = []
-        baseline_df = pd.DataFrame()
-        edge_df = {}
-        for anomaly in anomalies:
-            edge = anomaly.split('_')
-            anomalous_edges.append(tuple(edge))
-            # nodes.append(edge[0])
-            svc = edge[1]
-            anomalous_nodes.append(svc)
-            baseline_df[svc] = latency_df[anomaly]
-            edge_df[svc] = anomaly
+        for node in anomalous_nodes:
+            changed = False
+            #if any(map(lambda n: n in anomalous_nodes, graph.predecessors(node))):
+            for parent in graph.predecessors(node):
+                if parent in anomalous_nodes:
+                    changed = True
+                    anomalous_edges.append((parent, node))
+            
+            if changed:
+                anomalous_graph.add_node(node, status='anomaly', type=graph.nodes[node]['type'])
 
-        # Set contains the anomalous nodes (edge[1] for all anomalous egdes)
-        anomalous_nodes = set(anomalous_nodes)
+                    
+            
+        anomalous_nodes = list(anomalous_graph.nodes)
+        for node in anomalous_nodes:
+            for n in graph.predecessors(node):
+                if n not in anomalous_graph.nodes:
+                    anomalous_graph.add_node(n, status='normal', **graph.nodes[n])
+            
+            for n in graph.successors(node):
+                if n not in anomalous_graph.nodes:
+                    anomalous_graph.add_node(n, status='normal', **graph.nodes[n])
+            
+            anomalous_graph.add_edges_from(list(map(lambda x: x[::-1], graph.in_edges(node))))
+            anomalous_graph.add_edges_from(graph.out_edges(node))
 
-        # Find the anomalous nodes in the graph
+        
+        for node in anomalous_graph.nodes:
+            if anomalous_graph.nodes[node]['type'] == 'service':
+                avg = trace_df[trace_df['serviceName'] == node]['elapsedTime'].mean()
+                anomalous_graph.nodes[node]['rt'] = avg
+
+        return anomalous_graph, anomalous_edges
+
+    def get_fault_service(self, graph, anomalous_edges, traces, kpis):
+        for v in graph.nodes:
+            if graph.nodes[v]['status'] != 'anomaly':
+                continue
+            in_val = 0
+            for edge in graph.in_edges(v):
+                src, _ = edge
+
+                weight = self.weights_alpha if edge in anomalous_edges else traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == src]['elapsedTime'])
+                if math.isnan(weight): # in case kpis don't vary
+                    weight = 0
+
+                in_val += weight
+                new_edge = (src, v, {'weight': weight})
+            
+                nx.set_edge_attributes(graph, {(src, v) : {'weight' : weight}})
+            
+            in_val /= graph.in_degree(v)
+
+            for edge in graph.out_edges(v):
+                _, dst = edge
+                if graph.nodes[dst]['type'] == 'service':
+                    val = traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == dst]['elapsedTime'])
+                    if math.isnan(val): # in case kpis don't vary
+                        val = 0
+                else:
+                    max_corr = 0
+                    l = []
+                    #keys = traces[traces['serviceName'] == v]['cmdb_id']
+                    keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
+                    for key in keys:
+                        kpi = kpis[key[1]]
+                        serie = kpi['value']#.normalize()
+                        corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
+                        if math.isnan(corr): # in case kpis don't vary
+                            corr = 0
+                        l.append(abs(corr))
+
+                    max_corr = max(l)
+                    val = in_val * max_corr
+                nx.set_edge_attributes(graph, {(v, dst) : {'weight' : val}})
+        
         personalization = {}
-        for node in DG.nodes():
-            if node in anomalous_nodes:
-                personalization[node] = 0
-
-        # Get the subgraph of anomaly
-        anomaly_graph = nx.DiGraph()
-        for node in anomalous_nodes:
-            # For later: do we merge the two blocks into a single function that processes in/out bound egdes?
-
-            # Process inbound edges
-            for u, v, data in DG.in_edges(node, data=True):
-                edge = (u,v)
-                if edge in anomalous_edges:
-                    data = self.weights_alpha
-                else:
-                    normal_edge = u + '_' + v
-                    data = baseline_df[v].corr(latency_df[normal_edge])
-
-                data = round(data, 3)
-                anomaly_graph.add_edge(u,v, weight=data)
-                anomaly_graph.nodes[u]['type'] = DG.nodes[u]['type']
-                anomaly_graph.nodes[v]['type'] = DG.nodes[v]['type']
-
-            # Set personalization with container resource usage
-            # Process outbound edges
-            for u, v, data in DG.out_edges(node, data=True):
-                edge = (u,v)
-                if edge in anomalous_edges:
-                    data = self.weights_alpha
-                else:
-                    if DG.nodes[v]['type'] == 'host':
-                        data, col = self.node_weight(u, anomaly_graph, baseline_df, faults_name)
-                    else:
-                        normal_edge = u + '_' + v
-                        data = baseline_df[u].corr(latency_df[normal_edge])
-
-                data = round(data, 3)
-                anomaly_graph.add_edge(u,v, weight=data)
-                anomaly_graph.nodes[u]['type'] = DG.nodes[u]['type']
-                anomaly_graph.nodes[v]['type'] = DG.nodes[v]['type']
-
-        for node in anomalous_nodes:
-            max_corr, col = self.svc_personalization(node, anomaly_graph, baseline_df, faults_name)
-            personalization[node] = max_corr / anomaly_graph.degree(node)
-
-        # Edges are REVERSED here!
-        anomaly_graph = anomaly_graph.reverse(copy=True)
-
-        # These are also anomalous edges
-        edges = list(anomaly_graph.edges(data=True))
-
-        # Update weights for the hosts. Notice that the edge is created in REVERSE again v->u
-        for u, v, d in edges:
-            if anomaly_graph.nodes[node]['type'] == 'host': # TODO check this "node" indexing 
-                anomaly_graph.remove_edge(u,v)
-                anomaly_graph.add_edge(v,u,weight=d['weight'])
-
-        # if visualize:
-        #     plt.figure(figsize=(9,9))
-        #     pos = nx.spring_layout(anomaly_graph)
-        #     nx.draw(anomaly_graph, pos, with_labels=True, cmap = plt.get_cmap('jet'), node_size=1500, arrows=True, )
-        #     labels = nx.get_edge_attributes(anomaly_graph,'weight')
-        #     nx.draw_networkx_edge_labels(anomaly_graph,pos,edge_labels=labels)
-        #     plt.show()
-        #     print('Personalization:', personalization)
-
-        return anomaly_graph, personalization
+        for v in graph.nodes:
+            if graph.nodes[v]['status'] != 'anomaly':
+                continue    
+            
+            #get avg weight
+            vals = [graph.get_edge_data(*edge)['weight'] for edge in graph.out_edges(v)] #all edges
+            avg = sum(vals) / len(vals)
 
 
-    def anomaly_score(self, anomaly_graph, personalization):
+            # get max correlation value
+            max_corr = 0
+            l = []
+            #keys = traces[traces['serviceName'] == v]['cmdb_id'].unique()
+            keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
+            for key in keys:
+                kpi = kpis[key[1]]
+                serie = kpi['value']#.normalize()
+                corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
+                if math.isnan(corr): # in case kpis don't vary
+                    corr = 0
+                l.append(abs(corr))
+                max_corr = max(l)
+            
+            val = avg * max_corr
+            personalization[v] = val / graph.degree(v) # why do they do this in the original code?
+                
+        reversed_graph = graph.reverse(copy=True)
+
         scores = nx.pagerank(
-            anomaly_graph, 
-            alpha=self.page_rank_alpha, 
-            personalization=personalization, 
+            reversed_graph, 
+            alpha=self.page_rank_alpha,
+            personalization=personalization,
             max_iter=self.page_rank_max_iter
         )
-        scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return scores
+        scores = sorted(filter(lambda x: x[1] > 0, scores.items()), key=lambda x: x[1], reverse=True)
 
+        scores = defaultdict(int, scores)
 
-def print_rank(anomaly_score, target):
-    num = 10
-    for idx, anomaly_target in enumerate(anomaly_score):
-        if target in anomaly_target:
-            num = idx + 1
-            continue
-    print(target, ' Top K: ', num)
-    return num
+        # scores = ((service, %))
+        hosts = list(filter(lambda x: x[1]['type'] == 'host', graph.nodes(data=True)))
+        host_scores = []
+        for host in hosts:
+            hostname = host[0]
+            # weight, src
+            weights = [(graph.get_edge_data(*edge)['weight'], edge[0]) for edge in graph.in_edges(hostname)]
+            val = sum(map(lambda x: x[0] * scores[x[1]], weights))
+            host_scores.append((hostname, val))
+    
+        max_score = max(map(lambda x: x[1], host_scores))
 
+        return set(map(lambda x: x[0], filter(lambda x: x[1] == max_score, host_scores)))
+                
+                    
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    # simulate usage from the upper model
+    # receives KPI and Trace information as a dataframe in the given window interval
 
-    data_dir = os.path.join('data')
-    faults_type = ['service_cpu']
-    targets = ['orders']
+    # load trace data
+    # load kpi
 
-    mrca = MicroRCA(
-        data_dir=data_dir, 
-        faults_type=faults_type,
-        targets=targets,
-        debug=False
-    )
+    traces = pd.read_csv('data/small_trace.csv').drop(['Unnamed: 0'], axis=1)
+    kpis = pd.read_csv('data/small_kpis.csv').drop(['Unnamed: 0'], axis=1)
 
-    anomaly_score = mrca.detect(
-        faults_type=faults_type[0],
-        target=targets[0]
-    )
+    # print(traces)
 
-    print_rank(
-        anomaly_score, 
-        target=targets[0]
-    )
+    microRCA = MicroRCA()
+
+    res = microRCA.detect(traces, kpis, visualize=True)
+
+    print(f'Result {res}')
