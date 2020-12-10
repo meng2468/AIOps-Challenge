@@ -5,7 +5,6 @@ import requests
 import json
 
 from kafka import KafkaConsumer
-import train_vae
 
 from server_config import SERVER_CONFIGURATION
 
@@ -24,56 +23,57 @@ CONSUMER = KafkaConsumer('platform-index', 'business-index', 'trace',
 class PlatformIndex():  # pylint: disable=too-few-public-methods
     '''Structure for platform indices'''
 
-    __slots__ = ['item_id', 'name', 'bomc_id', 'timestamp', 'value', 'cmdb_id']
 
     def __init__(self, data):
-        self.item_id = data['itemid']
-        self.name = data['name']
-        self.bomc_id = data['bomc_id']
-        self.timestamp = data['timestamp']
-        self.value = data['value']
-        self.cmdb_id = data['cmdb_id']
+        self.item_id = [data['itemid']]
+        self.name = [data['name']]
+        self.bomc_id = [data['bomc_id']]
+        self.timestamp = [data['timestamp']]
+        self.value = [data['value']]
+        self.cmdb_id = [data['cmdb_id']]
 
+    def to_dataframe(self):
+        return pd.DataFrame.from_dict(self.__dict__)
 
 class BusinessIndex():  # pylint: disable=too-few-public-methods
     '''Structure for business indices'''
 
-    __slots__ = ['service_name', 'start_time', 'avg_time', 'num',
-                 'succee_num', 'succee_rate']
 
     def __init__(self, data):
-        self.service_name = data['serviceName']
-        self.start_time = data['startTime']
-        self.avg_time = data['avg_time']
-        self.num = data['num']
-        self.succee_num = data['succee_num']
-        self.succee_rate = data['succee_rate']
+        self.serviceName = [data['serviceName']]
+        self.startTime = [data['startTime']]
+        self.avg_time = [data['avg_time']]
+        self.num = [data['num']]
+        self.succee_num = [data['succee_num']]
+        self.succee_rate = [data['succee_rate']]
 
+    def to_dataframe(self):
+        return pd.DataFrame.from_dict(self.__dict__)
 
 class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-few-public-methods
     '''Structure for traces'''
 
-    __slots__ = ['call_type', 'start_time', 'elapsed_time', 'success',
-                 'trace_id', 'id', 'pid', 'cmdb_id', 'service_name', 'ds_name']
 
     def __init__(self, data):
-        self.call_type = data['callType']
-        self.start_time = data['startTime']
-        self.elapsed_time = data['elapsedTime']
-        self.success = data['success']
-        self.trace_id = data['traceId']
-        self.id = data['id']
-        self.pid = data['pid']
-        self.cmdb_id = data['cmdb_id']
+        self.callType = [data['callType']]
+        self.startTime = [data['startTime']]
+        self.elapsedTime = [data['elapsedTime']]
+        self.success = [data['success']]
+        self.traceId = [data['traceId']]
+        self.id = [data['id']]
+        self.pid = [data['pid']]
+        self.cmdb_id = [data['cmdb_id']]
 
         if 'serviceName' in data:
             # For data['callType']
             #  in ['CSF', 'OSB', 'RemoteProcess', 'FlyRemote', 'LOCAL']
-            self.service_name = data['serviceName']
+            self.serviceName = [data['serviceName']]
         if 'dsName' in data:
             # For data['callType'] in ['JDBC', 'LOCAL']
-            self.ds_name = data['dsName']
+            self.dsName = [data['dsName']]
 
+    def to_dataframe(self):
+        return pd.DataFrame.from_dict(self.__dict__)
 
 def submit(ctx):
     '''Submit answer into stdout'''
@@ -95,7 +95,12 @@ def main():
 
     #submit([['docker_003', 'container_cpu_used']])  FIXME Why was this here? 
     i = 0
-    clf = train_vae.train_vae()
+
+    df = {
+        'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
+        'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid'',cmdb_id','serviceName','callType']), 
+        'kpi': pd.DataFrame(columns=['item_id','name','bomc_id','timestamp','value','cmdb_id'])
+    }
 
     print(f'Starting connection with server at {SERVER_CONFIGURATION["KAFKA_QUEUE"]}')
     for message in CONSUMER:
@@ -105,35 +110,24 @@ def main():
             # data['body'].keys() is supposed to be
             # ['os_linux', 'db_oracle_11g', 'mw_redis', 'mw_activemq',
             #  'dcos_container', 'dcos_docker']
-            data = {
-                'timestamp': data['timestamp'],
-                'body': {
-                    stack: [PlatformIndex(item) for item in data['body'][stack]]
-                    for stack in data['body']
-                },
-            }
-            timestamp = data['timestamp']
+            new_df = pd.concat(map(lambda x: x.to_dataframe(), [PlatformIndex(item) for item in data['body'][stack] for stack in data['body']]))
+            df['kpi'] = pd.concat([df['kpi'],new_df])
+
         elif message.topic == 'business-index':
             # data['body'].keys() is supposed to be ['esb', ]
-            data = {
-                'startTime': data['startTime'],
-                'body': {
-                    key: [BusinessIndex(item) for item in data['body'][key]]
-                    for key in data['body']
-                },
-            }
-            for f in data['body']['esb']:
-                v = pd.DataFrame({'avg_time': [f.avg_time], 'succee_rate': [f.succee_rate]})
-                res = clf.predict(v)
-                print(f'Result was {res}')
-
-            timestamp = data['startTime']
+            new_df = pd.concat(map(lambda x: x.to_dataframe(), [BusinessIndex(item) for key in data['body'] for item in data['body'][key]]))
+            df['esb'] = pd.concat([df['esb'],new_df])
+            timestamp = int(new_df.iloc[0]['startTime']) - 1000 * 60 * 5 # window size: 5min
+            print(df['esb'])
+            # remove from all dfs
+            for key in df:
+                dataframe = df[key]
+                dataframe = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
+            
         else:  # message.topic == 'trace'
-            data = {
-                'startTime': data['startTime'],
-                'body': Trace(data),
-            }
-            timestamp = data['startTime']
+            new_df = Trace(data).to_dataframe() 
+            df['trace'] = pd.concat([df['trace'],new_df])
+
         print(i, message.topic, timestamp)
 
 
