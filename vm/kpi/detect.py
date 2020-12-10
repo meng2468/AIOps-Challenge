@@ -3,7 +3,6 @@ import pandas as pd
 import os
 
 import preprocessing as pp
-import model_gen as vae
 
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -12,7 +11,6 @@ time_step = 144
 
 thresh_dir = ''
 model_dir = ''
-
 
 def find_anom(host, dfs):
     problems = []

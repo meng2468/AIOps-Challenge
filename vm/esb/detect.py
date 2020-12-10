@@ -3,7 +3,6 @@ import pandas as pd
 import os
 
 import preprocessing as pp
-import model_gen as vae
 
 from tensorflow import keras
 from tensorflow.keras import layers
