@@ -92,7 +92,7 @@ def main():
     '''Consume data and react'''
     # Check authorities
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
-
+    
     #submit([['docker_003', 'container_cpu_used']])  FIXME Why was this here? 
     i = 0
     clf = train_vae.train_vae()

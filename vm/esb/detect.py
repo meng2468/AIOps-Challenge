@@ -1,36 +1,46 @@
-import numpy as np
 import pandas as pd
-import os
+import numpy as np
 
-import preprocessing as pp
+from statsmodels.tsa.seasonal import STL
 
-from tensorflow import keras
-from tensorflow.keras import layers
+def get_onehot(df):
+    df['start_time'] = pd.to_datetime(df['startTime'], unit='ms', origin='unix')
+    df = df.sort_values(by='start_time')
+    df = df.set_index('start_time')
+    return df
 
-time_step = 24
+def get_resid(df):
+    stl = STL(df['avg_time'], period=8, robust=True)
+    res_avgt = stl.fit()
 
-model_dir = '.'
-thresh_dir = '.'
+    stl = STL(df['num'], period=8, robust=True)
+    res_num = stl.fit()
 
+    return res_avgt.resid, res_num.resid
+
+def num_anom(resid):
+    upper_bound = 158
+    lower_bound = -177
+    
+    if resid[-1] >= upper_bound or resid[-1] <= lower_bound:
+        return True
+    return False
+
+def avgt_anom(resid):
+    upper_bound = .321
+    lower_bound = -.144
+    
+    if resid[-1] >= upper_bound or resid[-1] <= lower_bound:
+        return True
+
+    return False
 
 def find_anom(df):
-    problems = []
+    df = get_onehot(df)
+    avgt_resid, num_resid = get_resid(df)
 
-    thresh = pd.read_csv(thresh_dir+'thresh.csv')
+    is_avgt = avgt_anom(avgt_resid)
+    is_num = num_anom(num_resid)
+    is_sr = df['succee_rate'].values[-1] < 1
 
-    for name in ['num', 'avg_time']:
-        x_test = pp.get_esb_train_data(df, name, time_step)
-
-        model = keras.models.load_model(model_dir+name)
-        x_test_pred = model.predict(x_test)
-        test_mae_loss = np.mean(np.abs(x_test_pred - x_test), axis=1)
-        test_mae_loss = test_mae_loss.reshape((-1))
-        anomalies = np.greater(test_mae_loss, thresh[thresh.name==name]['thresh'].values[0])
-
-        if True in anomalies:
-            print("Anomaly in ", name)
-            problems.append(name)
-
-        if problems == []:
-            print("No anomalies found in ", name)
-    return problems
+    return is_avgt or is_num or is_sr
