@@ -140,16 +140,13 @@ def main():
             print(esb_is_anomalous)
 
             if(esb_is_anomalous):
-                ####################################################################
-                # FIXME: Local testing ONLY. PLEASE REMOVE BEFORE DEPLOYMENT
-                ####################################################################
-                micro_rca_data_dir = os.path.join('models','trace_localisation','microrca','data')
-
-                if df['trace'].empty:
-                    df['trace'] =  pd.read_csv(os.path.join(micro_rca_data_dir, 'small_trace.csv')).drop(['Unnamed: 0'], axis=1)
-                if df['kpi'].empty:
-                    df['kpi'] = pd.read_csv(os.path.join(micro_rca_data_dir, 'small_kpis.csv')).drop(['Unnamed: 0'], axis=1)
-                ####################################################################
+                # Local testing only. Load some sample data
+                if SERVER_CONFIGURATION["SUBMIT_IP"] is None:
+                    micro_rca_data_dir = os.path.join('models','trace_localisation','microrca','data')
+                    if df['trace'].empty:
+                        df['trace'] =  pd.read_csv(os.path.join(micro_rca_data_dir, 'small_trace.csv')).drop(['Unnamed: 0'], axis=1)
+                    if df['kpi'].empty:
+                        df['kpi'] = pd.read_csv(os.path.join(micro_rca_data_dir, 'small_kpis.csv')).drop(['Unnamed: 0'], axis=1)
 
                 anomalous_hosts = microRCA.detect(df['trace'], df['kpi'])
                 
