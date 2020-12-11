@@ -10,6 +10,8 @@ from server_config import SERVER_CONFIGURATION
 
 import pandas as pd
 
+from models.esb_detection.vae import detect as detect_esb
+
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
 AVAILABLE_TOPICS = set(['platform-index', 'business-index', 'trace'])
@@ -119,7 +121,7 @@ def main():
             df['esb'] = pd.concat([df['esb'],new_df], ignore_index=True)
 
             window_size_ms = 1000 * 60 * 5 # window size: 5min
-            timestamp = int(new_df.iloc[-1]['startTime']) - window_size_ms 
+            timestamp = int(new_df.iloc[-1]['startTime']) - window_size_ms # check the most recent
     
             # remove from all dfs
             for key in df:
@@ -127,6 +129,14 @@ def main():
                 df[key] = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
             
             print(df['esb'])
+            # Detect anomalies on esb
+            esb_anomaly_res = []
+            try:
+                esb_anomaly_res = detect_esb.find_anom(df['esb'])
+            except: 
+                pass
+            
+            print(esb_anomaly_res)
 
         else:  # message.topic == 'trace'
             new_df = Trace(data).to_dataframe() 
