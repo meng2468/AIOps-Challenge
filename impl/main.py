@@ -1,17 +1,17 @@
 '''
 Example for data consuming.
 '''
-import requests
 import json
-
-from kafka import KafkaConsumer
-
-from server_config import SERVER_CONFIGURATION
+import os
 
 import pandas as pd
+import requests
+from kafka import KafkaConsumer
 
 # from models.esb_detection.vae import detect as esb_vae
 from models.esb_detection.seas_decomp import detect as esb_seas
+from models.trace_localisation.microrca.micro_rca import MicroRCA
+from server_config import SERVER_CONFIGURATION
 
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
@@ -105,6 +105,9 @@ def main():
         'kpi': pd.DataFrame(columns=['item_id','name','bomc_id','timestamp','value','cmdb_id'])
     }
 
+    # Initialize the MicroRCA detector
+    microRCA = MicroRCA()
+
     print(f'Starting connection with server at {SERVER_CONFIGURATION["KAFKA_QUEUE"]}')
     for message in CONSUMER:
         i += 1
@@ -130,11 +133,27 @@ def main():
                 df[key] = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
             
             print(df['esb'])
-            
-            # Detect anomalies on esb with seasonality decomposition
-            esb_anomaly_res = esb_seas.find_anom(df['esb'])
 
-            print(esb_anomaly_res)
+            # Detect anomalies on esb with seasonality decomposition
+            esb_is_anomalous = esb_seas.find_anom(df['esb'])
+
+            print(esb_is_anomalous)
+
+            if(esb_is_anomalous):
+                ####################################################################
+                # FIXME: Local testing ONLY. PLEASE REMOVE BEFORE DEPLOYMENT
+                ####################################################################
+                micro_rca_data_dir = os.path.join('models','trace_localisation','microrca','data')
+
+                if df['trace'].empty:
+                    df['trace'] =  pd.read_csv(os.path.join(micro_rca_data_dir, 'small_trace.csv')).drop(['Unnamed: 0'], axis=1)
+                if df['kpi'].empty:
+                    df['kpi'] = pd.read_csv(os.path.join(micro_rca_data_dir, 'small_kpis.csv')).drop(['Unnamed: 0'], axis=1)
+                ####################################################################
+
+                anomalous_hosts = microRCA.detect(df['trace'], df['kpi'])
+                
+                print(anomalous_hosts)
 
         else:  # message.topic == 'trace'
             new_df = Trace(data).to_dataframe() 

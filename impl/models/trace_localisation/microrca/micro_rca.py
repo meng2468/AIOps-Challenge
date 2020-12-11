@@ -28,7 +28,7 @@ class MicroRCA:
         page_rank_max_iter=10000,
         model_checkoint='',
         debug=False,
-        pickle_folder='models/',
+        pickle_folder=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'models/'),
     ):   
         # mean and std deviation of training duration
         self.smoothing_window = smoothing_window
