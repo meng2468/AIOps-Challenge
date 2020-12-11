@@ -10,7 +10,8 @@ from server_config import SERVER_CONFIGURATION
 
 import pandas as pd
 
-from models.esb_detection.vae import detect as detect_esb
+# from models.esb_detection.vae import detect as esb_vae
+from models.esb_detection.seas_decomp import detect as esb_seas
 
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
@@ -129,13 +130,10 @@ def main():
                 df[key] = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
             
             print(df['esb'])
-            # Detect anomalies on esb
-            esb_anomaly_res = []
-            try:
-                esb_anomaly_res = detect_esb.find_anom(df['esb'])
-            except: 
-                pass
             
+            # Detect anomalies on esb with seasonality decomposition
+            esb_anomaly_res = esb_seas.find_anom(df['esb'])
+
             print(esb_anomaly_res)
 
         else:  # message.topic == 'trace'
