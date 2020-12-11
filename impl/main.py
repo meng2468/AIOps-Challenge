@@ -111,22 +111,26 @@ def main():
             # ['os_linux', 'db_oracle_11g', 'mw_redis', 'mw_activemq',
             #  'dcos_container', 'dcos_docker']
             new_df = pd.concat(map(lambda x: x.to_dataframe(), [PlatformIndex(item) for stack in data['body'] for item in data['body'][stack]]))
-            df['kpi'] = pd.append([df['kpi'],new_df], ignore_index=True)
+            df['kpi'] = pd.concat([df['kpi'],new_df], ignore_index=True)
 
         elif message.topic == 'business-index':
             # data['body'].keys() is supposed to be ['esb', ]
             new_df = pd.concat(map(lambda x: x.to_dataframe(), [BusinessIndex(item) for key in data['body'] for item in data['body'][key]]))
-            df['esb'] = pd.append([df['esb'],new_df], ignore_index=True)
-            timestamp = int(new_df.iloc[0]['startTime']) - 1000 * 60 * 5 # window size: 5min
-            print(df['esb'])
+            df['esb'] = pd.concat([df['esb'],new_df], ignore_index=True)
+
+            window_size_ms = 1000 * 60 * 5 # window size: 5min
+            timestamp = int(new_df.iloc[-1]['startTime']) - window_size_ms 
+    
             # remove from all dfs
             for key in df:
                 dataframe = df[key]
-                dataframe = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
+                df[key] = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
+            
+            print(df['esb'])
 
         else:  # message.topic == 'trace'
             new_df = Trace(data).to_dataframe() 
-            df['trace'] = pd.append([df['trace'],new_df], ignore_index=True)
+            df['trace'] = pd.concat([df['trace'],new_df], ignore_index=True)
 
 
 
