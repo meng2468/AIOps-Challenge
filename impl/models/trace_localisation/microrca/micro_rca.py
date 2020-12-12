@@ -238,6 +238,25 @@ class MicroRCA:
 
         return anomalous_graph, anomalous_edges
 
+    def get_max_correlation(self, times, host_kpi_df):
+        """ Returns absolute value of correlation """
+        max_corr = 0
+        for k in host_kpi_df['name'].unique():
+            serie = host_kpi_df[host_kpi_df['name'] == k]['value']
+            if len(serie.index) == 1 or serie.var() == 0:
+                continue
+            
+            corr = serie.corr(times) # FIXME divide by zero sometimes?
+
+            if math.isnan(corr): # in case kpis don't vary
+                corr = 0
+            
+            #l.append(abs(corr))
+            corr = abs(corr)
+            max_corr = max(corr, max_corr)
+
+        return max_corr
+
     def get_fault_service(self, graph, anomalous_edges, traces, kpis):
         for v in graph.nodes:
             if graph.nodes[v]['status'] != 'anomaly':
@@ -265,25 +284,10 @@ class MicroRCA:
                     if math.isnan(val): # in case kpis don't vary
                         val = 0
                 else: # host
-                    max_corr = 0
-                    l = []
-                   
                     kpi = kpis[dst]
 
                     times = traces[traces['serviceName'] == v]['elapsedTime']
-                    for k in kpi['name'].unique():
-                        serie = kpi[kpi['name'] == k]['value']#.normalize()
-                        if len(serie.index) == 1 or serie.var() == 0:
-                            l.append(0)
-                            continue
-                        
-                        corr = serie.corr(times) # FIXME divide by zero sometimes?
-
-                        if math.isnan(corr): # in case kpis don't vary
-                            corr = 0
-                        l.append(abs(corr))
-
-                    max_corr = max(l)
+                    max_corr = self.get_max_correlation(times, kpi)
                     val = in_val * max_corr
                 nx.set_edge_attributes(graph, {(v, dst) : {'weight' : val}})
         
@@ -301,26 +305,14 @@ class MicroRCA:
 
             # get max correlation value
             max_corr = 0
-            l = []
 
             times = traces[traces['serviceName'] == v]['elapsedTime']
 
             keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
             for key in keys:
                 kpi_df = kpis[key[1]]
-
-                for kpi in kpi_df['name'].unique():
-                    serie = kpi_df[kpi_df['name'] == kpi]['value']
-
-                    if len(serie.index) == 1 or serie.var() == 0:
-                        l.append(0)
-                        continue
-
-                    corr = serie.corr(times)
-                    if math.isnan(corr): # in case kpis don't vary
-                        corr = 0
-                    l.append(abs(corr))
-                    max_corr = max(l)
+                val = self.get_max_correlation(times, kpi_df)
+                max_corr = max(max_corr, val)
             
             val = avg * max_corr
             personalization[v] = val / graph.degree(v) # why do they do this in the original code?
