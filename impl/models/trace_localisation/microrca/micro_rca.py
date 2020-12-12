@@ -68,18 +68,20 @@ class MicroRCA:
         #   1.1 microRCA
 
         traces = self.get_anomalous_traces(traces_df)
-        # print(traces, len(traces))
-        # print(self.detectors['osb_001OSB'].anomaly_index)
-        # print(parsed_traces[traces[0]].head())
-        # print('Unique services in trace:', len(parsed_traces[traces[0]]['serviceName'].unique()))
 
-        # Should we iterate here over each trace in traces or consider them all together?
-        # for trace_id in traces:
-        #   trace = parsed_traces[trace_id]
-        #   DG = self.trace_graph(trace)
-        #   ... [Perform the rest of the steps]
+        for trace in traces:
+            trace_df = parsed_traces[trace]
+            trace_df = trace_df.reset_index()
 
-        # TODO Build attribute graph 
+            csf = trace_df[trace_df['callType'] == 'CSF']['id'].index
+            
+            for i in csf:
+                trace_df.at[i, 'cmdb_id'] = trace_df[trace_df['pid'] == trace_df.iloc[i]['id']]['cmdb_id'].iloc[0]
+
+            parsed_traces[trace] = trace_df
+
+        
+        
         # Hosts + Service
         # Each service connects to all the services it communicates with and all hosts it connects to (no need to differentiate!)
         DG = nx.DiGraph()
@@ -104,7 +106,7 @@ class MicroRCA:
         # Extract anomalous subgraph
         anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
 
-        # TODO Faulty service localization
+        # Faulty service localization
         # Update weights of anomalous graph
         #           Use cases from the paper
         # Get personalization vector (Transition Probability Matrix)
@@ -113,11 +115,6 @@ class MicroRCA:
         parsed_kpis = self.parse_kpis(kpis)
         
         result = self.get_fault_service(anomaly_DG, anomalous_edges, traces_df, parsed_kpis)
-        # result = list(map(lambda x: x[0], filter(lambda x: x[1] > 0, result)))
-
-        # hosts = []
-        # for v in result:
-        #     hosts.append(set(map(lambda x: x[1], filter(lambda x: anomaly_DG.nodes[x[1]]['type']=='host', anomaly_DG.out_edges(v)))))
 
         return result
 
@@ -138,10 +135,6 @@ class MicroRCA:
 
     def parse_traces(self, traces):
         traces = dict(tuple(traces.sort_values('traceId').groupby('traceId')))
-        # for key in traces:
-        #     df = traces[key].sort_values('startTime')
-        #     print(df['elapsedTime'].iloc[0], df['traceId'].iloc[0], sep='\t')
-        # i = 1
         return traces 
 
     def parse_kpis(self, kpis):
@@ -241,6 +234,7 @@ class MicroRCA:
     def get_max_correlation(self, times, host_kpi_df):
         """ Returns absolute value of correlation """
         max_corr = 0
+        key = None
         for k in host_kpi_df['name'].unique():
             serie = host_kpi_df[host_kpi_df['name'] == k]['value']
             if len(serie.index) == 1 or serie.var() == 0:
@@ -251,11 +245,12 @@ class MicroRCA:
             if math.isnan(corr): # in case kpis don't vary
                 corr = 0
             
-            #l.append(abs(corr))
             corr = abs(corr)
-            max_corr = max(corr, max_corr)
+            if corr > max_corr:
+                max_corr = corr
+                key = k
 
-        return max_corr
+        return max_corr, key
 
     def get_fault_service(self, graph, anomalous_edges, traces, kpis):
         for v in graph.nodes:
@@ -287,7 +282,7 @@ class MicroRCA:
                     kpi = kpis[dst]
 
                     times = traces[traces['serviceName'] == v]['elapsedTime']
-                    max_corr = self.get_max_correlation(times, kpi)
+                    max_corr, _ = self.get_max_correlation(times, kpi)
                     val = in_val * max_corr
                 nx.set_edge_attributes(graph, {(v, dst) : {'weight' : val}})
         
@@ -298,8 +293,7 @@ class MicroRCA:
             
             #get avg weight
             vals = [graph.get_edge_data(*edge)['weight'] for edge in graph.out_edges(v)] #all 
-            if 'csf' in v:
-                print(v, vals)
+            
             avg = sum(vals) / len(vals)
 
 
@@ -307,15 +301,21 @@ class MicroRCA:
             max_corr = 0
 
             times = traces[traces['serviceName'] == v]['elapsedTime']
-
+            most_prob_host = None
             keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
+            kpi_name = None
             for key in keys:
                 kpi_df = kpis[key[1]]
-                val = self.get_max_correlation(times, kpi_df)
-                max_corr = max(max_corr, val)
+                val, kpi = self.get_max_correlation(times, kpi_df)
+                if val > max_corr:
+                    most_prob_host = key[1]
+                    max_corr = val
+                    kpi_name = kpi
             
             val = avg * max_corr
             personalization[v] = val / graph.degree(v) # why do they do this in the original code?
+            graph.nodes[v]['most_probable_host'] = most_prob_host
+            graph.nodes[v]['kpi_name'] = kpi_name
                 
         reversed_graph = graph.reverse(copy=True)
 
@@ -326,7 +326,7 @@ class MicroRCA:
             max_iter=self.page_rank_max_iter
         )
         scores = sorted(filter(lambda x: x[1] > 0, scores.items()), key=lambda x: x[1], reverse=True)
-        print(scores)
+
         hosts = list(filter(lambda x: x[1]['type'] == 'host', graph.nodes(data=True)))
         
         max_score = max(map(lambda x: x[1], scores))
@@ -339,9 +339,9 @@ class MicroRCA:
                     final_hosts.add(host[0])
 
         # final hosts -> correlation
-        
+        hosts_info = [[graph.nodes[node]['most_probable_host'], graph.nodes[node]['kpi_name']] for node in result]
             
-        return final_hosts
+        return hosts_info
                 
                     
 
