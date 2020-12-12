@@ -140,7 +140,7 @@ def handle_anomaly(df, microRCA, timestamp):
     # NOTE: Do we just select one? The submit function also accepts a list of [(host, kpi), (host, kpi),...]
     if SERVER_CONFIGURATION["SUBMIT_IP"] is not None:
         
-        submit(anomalous_host) 
+        submit(anomalous_hosts) 
 
 
 def main():
@@ -171,15 +171,17 @@ def main():
             # data['body'].keys() is supposed to be ['esb', ]
             print(f'Received {data}')
             new_df = pd.concat(map(lambda x: x.to_dataframe(), [BusinessIndex(item) for key in data['body'] for item in data['body'][key]]))
-            df['esb'] = pd.concat([df['esb'],new_df], ignore_index=True)
+            df['esb'] = pd.concat([df['esb'],new_df], ignore_index=True).sort_values('startTime')
 
-            window_size_ms = 1000 * 60 * 5 # window size: 5min
-            timestamp = int(new_df.iloc[-1]['startTime']) - window_size_ms # check the most recent
+            window_size_ms = 1000 * 60 * 10 # window size: 5min
+            timestamp = int(df['esb'].iloc[-1]['startTime']) - window_size_ms # check the most recent
     
             # remove from all dfs
             for key in df:
                 dataframe = df[key]
-                df[key] = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
+                if (key == 'kpi'):
+                    df[key] = dataframe[dataframe['timestamp'] >= timestamp*6]
+                df[key] = dataframe[dataframe['startTime' if key != 'kpi'] >= timestamp]
           
 
             # Detect anomalies on esb with seasonality decomposition
@@ -187,7 +189,7 @@ def main():
 
             if(esb_is_anomalous):
                 print('Anomaly detected. Tracing...')
-                t = threading.Thread(target=handle_anomaly, args=(df,microRCA, data['timestamp']))
+                t = threading.Thread(target=handle_anomaly, args=(df,microRCA, df['esb'].iloc[-1]['startTime']))
                 t.start()
                 # TODO do we need to wait for it?
 
