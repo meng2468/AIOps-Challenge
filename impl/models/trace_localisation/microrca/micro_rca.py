@@ -319,7 +319,12 @@ class MicroRCA:
             personalization[v] = val / graph.degree(v) # why do they do this in the original code?
             graph.nodes[v]['most_probable_host'] = most_prob_host
             graph.nodes[v]['kpi_name'] = kpi_name
-                
+        
+        anomalous = any(map(lambda x: x > 0, personalization.values()))
+        if not anomalous:
+            raise ValueError('No anomaly could be found.')
+        print(personalization)
+
         reversed_graph = graph.reverse(copy=True)
 
         scores = nx.pagerank(
