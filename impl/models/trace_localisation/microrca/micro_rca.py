@@ -206,6 +206,10 @@ class MicroRCA:
             changed = False
             #if any(map(lambda n: n in anomalous_nodes, graph.predecessors(node))):
             for parent in graph.predecessors(node):
+                # Avoid self loops (in CSF inside and outside span) 
+                if parent == node:
+                    continue
+
                 if parent in anomalous_nodes:
                     changed = True
                     anomalous_edges.append((parent, node))
@@ -213,8 +217,6 @@ class MicroRCA:
             if changed:
                 anomalous_graph.add_node(node, status='anomaly', type=graph.nodes[node]['type'])
 
-                    
-            
         anomalous_nodes = list(anomalous_graph.nodes)
         for node in anomalous_nodes:
             for n in graph.predecessors(node):
@@ -243,7 +245,6 @@ class MicroRCA:
             in_val = 0
             for edge in graph.in_edges(v):
                 src, _ = edge
-
                 weight = self.weights_alpha if edge in anomalous_edges else traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == src]['elapsedTime'])
                 if math.isnan(weight): # in case kpis don't vary
                     weight = 0
@@ -257,19 +258,27 @@ class MicroRCA:
 
             for edge in graph.out_edges(v):
                 _, dst = edge
+                if (edge in anomalous_edges):
+                    continue
                 if graph.nodes[dst]['type'] == 'service':
                     val = traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == dst]['elapsedTime'])
                     if math.isnan(val): # in case kpis don't vary
                         val = 0
-                else:
+                else: # host
                     max_corr = 0
                     l = []
-                    #keys = traces[traces['serviceName'] == v]['cmdb_id']
-                    keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
-                    for key in keys:
-                        kpi = kpis[key[1]]
-                        serie = kpi['value']#.normalize()
-                        corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
+                   
+                    kpi = kpis[dst]
+
+                    times = traces[traces['serviceName'] == v]['elapsedTime']
+                    for k in kpi['name'].unique():
+                        serie = kpi[kpi['name'] == k]['value']#.normalize()
+                        if len(serie.index) == 1 or serie.var() == 0:
+                            l.append(0)
+                            continue
+                        
+                        corr = serie.corr(times) # FIXME divide by zero sometimes?
+
                         if math.isnan(corr): # in case kpis don't vary
                             corr = 0
                         l.append(abs(corr))
@@ -284,23 +293,34 @@ class MicroRCA:
                 continue    
             
             #get avg weight
-            vals = [graph.get_edge_data(*edge)['weight'] for edge in graph.out_edges(v)] #all edges
+            vals = [graph.get_edge_data(*edge)['weight'] for edge in graph.out_edges(v)] #all 
+            if 'csf' in v:
+                print(v, vals)
             avg = sum(vals) / len(vals)
 
 
             # get max correlation value
             max_corr = 0
             l = []
-            #keys = traces[traces['serviceName'] == v]['cmdb_id'].unique()
+
+            times = traces[traces['serviceName'] == v]['elapsedTime']
+
             keys = filter(lambda x: graph.nodes[x[1]]['type']=='host', graph.out_edges(v))
             for key in keys:
-                kpi = kpis[key[1]]
-                serie = kpi['value']#.normalize()
-                corr = serie.corr(traces[traces['serviceName'] == v]['elapsedTime'])#pearsonr(serie, traces[traces['serviceName']== v]['elapsedTime'])
-                if math.isnan(corr): # in case kpis don't vary
-                    corr = 0
-                l.append(abs(corr))
-                max_corr = max(l)
+                kpi_df = kpis[key[1]]
+
+                for kpi in kpi_df['name'].unique():
+                    serie = kpi_df[kpi_df['name'] == kpi]['value']
+
+                    if len(serie.index) == 1 or serie.var() == 0:
+                        l.append(0)
+                        continue
+
+                    corr = serie.corr(times)
+                    if math.isnan(corr): # in case kpis don't vary
+                        corr = 0
+                    l.append(abs(corr))
+                    max_corr = max(l)
             
             val = avg * max_corr
             personalization[v] = val / graph.degree(v) # why do they do this in the original code?
@@ -314,22 +334,22 @@ class MicroRCA:
             max_iter=self.page_rank_max_iter
         )
         scores = sorted(filter(lambda x: x[1] > 0, scores.items()), key=lambda x: x[1], reverse=True)
-
-        scores = defaultdict(int, scores)
-
-        # scores = ((service, %))
+        print(scores)
         hosts = list(filter(lambda x: x[1]['type'] == 'host', graph.nodes(data=True)))
-        host_scores = []
-        for host in hosts:
-            hostname = host[0]
-            # weight, src
-            weights = [(graph.get_edge_data(*edge)['weight'], edge[0]) for edge in graph.in_edges(hostname)]
-            val = sum(map(lambda x: x[0] * scores[x[1]], weights))
-            host_scores.append((hostname, val))
-    
-        max_score = max(map(lambda x: x[1], host_scores))
+        
+        max_score = max(map(lambda x: x[1], scores))
+        result = set(map(lambda x: x[0], filter(lambda x: x[1] == max_score, scores)))
+        
+        final_hosts = set()
+        for service in result:
+            for host in hosts:
+                if (graph.has_edge(service, host[0])):
+                    final_hosts.add(host[0])
 
-        return set(map(lambda x: x[0], filter(lambda x: x[1] == max_score, host_scores)))
+        # final hosts -> correlation
+        
+            
+        return final_hosts
                 
                     
 
@@ -347,6 +367,6 @@ if __name__ == '__main__':
 
     microRCA = MicroRCA()
 
-    res = microRCA.detect(traces, kpis, visualize=True)
+    res = microRCA.detect(traces, kpis, visualize=False)
 
     print(f'Result {res}')
