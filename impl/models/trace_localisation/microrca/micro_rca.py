@@ -106,6 +106,9 @@ class MicroRCA:
         # Extract anomalous subgraph
         anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
 
+        if nx.is_empty(anomaly_DG):
+            raise ValueError('No anomaly detected')
+
         # Faulty service localization
         # Update weights of anomalous graph
         #           Use cases from the paper

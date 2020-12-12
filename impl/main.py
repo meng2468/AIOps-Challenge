@@ -147,7 +147,7 @@ def main():
 
     df = {
         'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
-        'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid'',cmdb_id','serviceName','callType']), 
+        'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid','cmdb_id','serviceName','callType']), 
         'kpi': pd.DataFrame(columns=['item_id','name','bomc_id','timestamp','value','cmdb_id'])
     }
     # Initialize the MicroRCA detector
