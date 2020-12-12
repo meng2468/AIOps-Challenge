@@ -94,7 +94,7 @@ def submit(ctx):
     r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
 
-def handle_anomaly(df, microRCA):
+def handle_anomaly(df, microRCA, timestamp):
     # Local testing only. Load some sample data
     if SERVER_CONFIGURATION["SUBMIT_IP"] is None:
         micro_rca_data_dir = os.path.join('models','trace_localisation','microrca','data')
@@ -102,8 +102,11 @@ def handle_anomaly(df, microRCA):
             df['trace'] =  pd.read_csv(os.path.join(micro_rca_data_dir, 'small_trace.csv')).drop(['Unnamed: 0'], axis=1)
         if df['kpi'].empty:
             df['kpi'] = pd.read_csv(os.path.join(micro_rca_data_dir, 'small_kpis.csv')).drop(['Unnamed: 0'], axis=1)
-
-    anomalous_hosts = microRCA.detect(df['trace'], df['kpi'])
+        anomalous_hosts = microRCA.detect(df['trace'], df['kpi'])
+    else:
+        traces = df['trace'][df['trace']['startTime'] <= timestamp]
+        kpis = df['kpi'][df['kpi']['timestamp'] <= timestamp]
+        anomalous_hosts = microRCA.detect(traces, kpis)
     
     print(anomalous_hosts)
 
@@ -184,7 +187,7 @@ def main():
 
             if(esb_is_anomalous):
                 print('Anomaly detected. Tracing...')
-                t = threading.Thread(target=handle_anomaly, args=(df,microRCA))
+                t = threading.Thread(target=handle_anomaly, args=(df,microRCA, data['timestamp']))
                 t.start()
                 # TODO do we need to wait for it?
 
