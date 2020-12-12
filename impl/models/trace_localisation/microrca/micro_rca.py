@@ -76,8 +76,12 @@ class MicroRCA:
             csf = trace_df[trace_df['callType'] == 'CSF']['id'].index
             
             for i in csf:
-                trace_df.at[i, 'cmdb_id'] = trace_df[trace_df['pid'] == trace_df.iloc[i]['id']]['cmdb_id'].iloc[0]
-
+                try:
+                    trace_df.at[i, 'cmdb_id'] = trace_df[trace_df['pid'] == trace_df.iloc[i]['id']]['cmdb_id'].iloc[0]
+                except:
+                    pass # root
+            
+            
             parsed_traces[trace] = trace_df
 
         
@@ -103,6 +107,7 @@ class MicroRCA:
             nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
             plt.show()
 
+        print(nx.is_weakly_connected(DG))
         # Extract anomalous subgraph
         anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
 
@@ -212,7 +217,8 @@ class MicroRCA:
             
             if changed:
                 anomalous_graph.add_node(node, status='anomaly', type=graph.nodes[node]['type'])
-
+        pprint(anomalous_edges)
+        pprint(list(anomalous_graph.nodes))
         anomalous_nodes = list(anomalous_graph.nodes)
         for node in anomalous_nodes:
             for n in graph.predecessors(node):
@@ -223,15 +229,23 @@ class MicroRCA:
                 if n not in anomalous_graph.nodes:
                     anomalous_graph.add_node(n, status='normal', **graph.nodes[n])
             
-            anomalous_graph.add_edges_from(list(map(lambda x: x[::-1], graph.in_edges(node))))
-            anomalous_graph.add_edges_from(graph.out_edges(node))
-
+            # anomalous_graph.add_edges_from(list(map(lambda x: x[::-1], graph.in_edges(node))))
+            # anomalous_graph.add_edges_from(graph.out_edges(node))
+            for n in graph.predecessors(node):
+                if n != node:
+                    anomalous_graph.add_edge(n, node)
+            
+            for n in graph.successors(node):
+                if n != node:
+                    anomalous_graph.add_edge(node, n)
+            
         
         for node in anomalous_graph.nodes:
             if anomalous_graph.nodes[node]['type'] == 'service':
                 avg = trace_df[trace_df['serviceName'] == node]['elapsedTime'].mean()
                 anomalous_graph.nodes[node]['rt'] = avg
-
+        pprint(list(anomalous_graph.nodes(data=True)))
+        pprint(list(anomalous_graph.edges(data=True)))
         return anomalous_graph, anomalous_edges
 
     def get_max_correlation(self, times, host_kpi_df):
@@ -267,9 +281,9 @@ class MicroRCA:
                     weight = 0
 
                 in_val += weight
-                new_edge = (src, v, {'weight': weight})
+                # new_edge = (src, v, {'weight': round(weight,3)})
             
-                nx.set_edge_attributes(graph, {(src, v) : {'weight' : weight}})
+                nx.set_edge_attributes(graph, {(src, v) : {'weight' : round(weight,3)}})
             
             in_val /= graph.in_degree(v)
 
@@ -287,7 +301,7 @@ class MicroRCA:
                     times = traces[traces['serviceName'] == v]['elapsedTime']
                     max_corr, _ = self.get_max_correlation(times, kpi)
                     val = in_val * max_corr
-                nx.set_edge_attributes(graph, {(v, dst) : {'weight' : val}})
+                nx.set_edge_attributes(graph, {(v, dst) : {'weight' : round(val,3)}})
         
         personalization = {}
         for v in graph.nodes:
@@ -310,7 +324,7 @@ class MicroRCA:
             for key in keys:
                 kpi_df = kpis[key[1]]
                 val, kpi = self.get_max_correlation(times, kpi_df)
-                if val > max_corr:
+                if val >= max_corr:
                     most_prob_host = key[1]
                     max_corr = val
                     kpi_name = kpi
@@ -319,11 +333,13 @@ class MicroRCA:
             personalization[v] = val / graph.degree(v) # why do they do this in the original code?
             graph.nodes[v]['most_probable_host'] = most_prob_host
             graph.nodes[v]['kpi_name'] = kpi_name
-        
-        anomalous = any(map(lambda x: x > 0, personalization.values()))
-        if not anomalous:
-            raise ValueError('No anomaly could be found.')
         print(personalization)
+        anomalous = any(map(lambda x: x > 0, personalization.values()))
+        # if not anomalous:
+        #     raise ValueError('No anomaly could be found.')
+        if not anomalous:
+            N = len(personalization)
+            personalization = dict(map(lambda x: (x, 1/N), personalization))
 
         reversed_graph = graph.reverse(copy=True)
 
@@ -334,7 +350,7 @@ class MicroRCA:
             max_iter=self.page_rank_max_iter
         )
         scores = sorted(filter(lambda x: x[1] > 0, scores.items()), key=lambda x: x[1], reverse=True)
-
+        print(f'Scores {scores}')
         hosts = list(filter(lambda x: x[1]['type'] == 'host', graph.nodes(data=True)))
         
         max_score = max(map(lambda x: x[1], scores))
@@ -360,8 +376,8 @@ if __name__ == '__main__':
     # load trace data
     # load kpi
 
-    traces = pd.read_csv('data/small_trace.csv').drop(['Unnamed: 0'], axis=1)
-    kpis = pd.read_csv('data/small_kpis.csv').drop(['Unnamed: 0'], axis=1)
+    traces = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_trace2.csv').drop(['Unnamed: 0'], axis=1)
+    kpis = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_kpis2.csv').drop(['Unnamed: 0'], axis=1)
 
     # print(traces)
 
