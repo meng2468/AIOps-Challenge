@@ -11,7 +11,7 @@ from kafka import KafkaConsumer
 # from models.esb_detection.vae import detect as esb_vae
 from models.esb_detection.seas_decomp import detect as esb_seas
 from models.trace_localisation.microrca.micro_rca import MicroRCA
-from models.kpi_detection.vae import detect as kpi_detection
+# from models.kpi_detection.vae import detect as kpi_detection
 from server_config import SERVER_CONFIGURATION
 
 # Three topics are available: platform-index, business-index, trace.
@@ -97,9 +97,6 @@ def main():
     # Check authorities
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
 
-    #submit([['docker_003', 'container_cpu_used']])  FIXME Why was this here? 
-    i = 0
-
     df = {
         'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
         'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid'',cmdb_id','serviceName','callType']), 
@@ -108,7 +105,7 @@ def main():
 
     # Initialize the MicroRCA detector
     microRCA = MicroRCA()
-
+    i = 0
     print(f'Starting connection with server at {SERVER_CONFIGURATION["KAFKA_QUEUE"]}')
     for message in CONSUMER:
         i += 1
@@ -132,13 +129,10 @@ def main():
             for key in df:
                 dataframe = df[key]
                 df[key] = dataframe[dataframe['startTime' if key != 'kpi' else 'timestamp'] >= timestamp]
-            
-            print(df['esb'])
+          
 
             # Detect anomalies on esb with seasonality decomposition
             esb_is_anomalous = esb_seas.find_anom(df['esb'])
-
-            print(esb_is_anomalous)
 
             if(esb_is_anomalous):
                 # Local testing only. Load some sample data
@@ -153,14 +147,14 @@ def main():
                 
                 print(anomalous_hosts)
 
-                # >> Complex piece of logic here... 
-                def host_to_key(host):
-                    if 'docker_' in host: return 'dcos_docker'
-                    if 'container_' in host: return 'dcos_container'
-                    if 'db_' in host: return 'db_oracle_11g'
-                    if 'redis_' in host: return 'mw_redis'
-                    if 'os_' in host: return 'os_linux'
-                    return host # 
+                # # >> Complex piece of logic here... 
+                # def host_to_key(host):
+                #     if 'docker_' in host: return 'dcos_docker'
+                #     if 'container_' in host: return 'dcos_container'
+                #     if 'db_' in host: return 'db_oracle_11g'
+                #     if 'redis_' in host: return 'mw_redis'
+                #     if 'os_' in host: return 'os_linux'
+                #     return host # 
 
                 # kpi_dict = dict(tuple(df['kpi'].groupby('cmdb_id')))
                 # for key in list(kpi_dict.keys()):
@@ -168,22 +162,22 @@ def main():
                 #     kpi_dict[new_key] = kpi_dict.pop(key)
 
                 # print(kpi_dict)
-                print(df['kpi'])
-                # Run KPI anomaly detection for each host in order
-                host_kpi_anomalies = []
-                for host in anomalous_hosts:
-                    print('Running KPI detection on host', host)
+                # print(df['kpi'])
+                # # Run KPI anomaly detection for each host in order
+                # host_kpi_anomalies = []
+                # for host in anomalous_hosts:
+                #     print('Running KPI detection on host', host)
 
-                    problems = kpi_detection.find_anom(host, {host_to_key(host): df['kpi']})
-                    host_kpi_anomalies.append(problems)
+                #     problems = kpi_detection.find_anom(host, {host_to_key(host): df['kpi']})
+                #     host_kpi_anomalies.append(problems)
                 
-                print(host_kpi_anomalies)
+                # print(host_kpi_anomalies)
 
                 # if no host is anomalus, do submit the first from the list with None
                 # NOTE: Do we just select one? The submit function also accepts a list of [(host, kpi), (host, kpi),...]
                 if SERVER_CONFIGURATION["SUBMIT_IP"] is not None:
                     
-                    submit([[list(anomalous_hosts)[0], None]]) 
+                    submit(anomalous_hosts) 
 
         else:  # message.topic == 'trace'
             new_df = Trace(data).to_dataframe() 
