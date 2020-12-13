@@ -102,7 +102,7 @@ def submit(ctx, timestamp):
         return 
     elif now - anomaly_detection_time <= 1000*60*10:
         # valid submission but need to add extra data
-        if not any(map(lambda x: x in anomaly_list, ctx)):
+        if all(map(lambda x: x in anomaly_list, ctx)):
             print(f'[INFO] No new elements in {ctx} to add to submission. Skipping...')
             return
         anomaly_list.extend(list(filter(lambda x: x not in anomaly_list, ctx)))
