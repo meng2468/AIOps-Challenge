@@ -12,6 +12,7 @@ import threading
 
 # from models.esb_detection.vae import detect as esb_vae
 from models.esb_detection.seas_decomp import detect as esb_seas
+from models.esb_detection.heuristic import detect as esb_heur
 from models.trace_localisation.microrca.micro_rca import MicroRCA
 # from models.kpi_detection.vae import detect as kpi_detection
 from server_config import SERVER_CONFIGURATION
@@ -25,6 +26,8 @@ CONSUMER = KafkaConsumer('platform-index', 'business-index', 'trace',
                          enable_auto_commit=False,
                          security_protocol='PLAINTEXT')
 
+def print_sep():
+    print('*'*60)
 
 class PlatformIndex():  # pylint: disable=too-few-public-methods
     '''Structure for platform indices'''
@@ -169,6 +172,7 @@ def main():
 
         elif message.topic == 'business-index':
             # data['body'].keys() is supposed to be ['esb', ]
+            print_sep()
             print(f'Received {data}')
             new_df = pd.concat(map(lambda x: x.to_dataframe(), [BusinessIndex(item) for key in data['body'] for item in data['body'][key]]))
             df['esb'] = pd.concat([df['esb'],new_df], ignore_index=True).sort_values('startTime')
@@ -189,15 +193,21 @@ def main():
           
 
             # Detect anomalies on esb with seasonality decomposition
-            esb_is_anomalous = esb_seas.find_anom(df['esb'])
+            print_sep()
+            esb_is_anomalous = esb_heur.find_anom(df['esb'])
 
             if(esb_is_anomalous):
-                print('Anomaly detected. Tracing...')
+                print('ESB anomaly detected')
+                print_sep()
+                print('Running microRCA...')
                 t = threading.Thread(target=handle_anomaly, args=(df,microRCA, df['esb'].iloc[-1]['startTime']))
                 t.start()
                 # TODO do we need to wait for it?
+            else:
+                print('No ESB anomaly')
 
         else:  # message.topic == 'trace'
+
             new_df = Trace(data).to_dataframe() 
             df['trace'] = pd.concat([df['trace'],new_df], ignore_index=True)
 
