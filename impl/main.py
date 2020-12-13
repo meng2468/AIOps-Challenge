@@ -113,105 +113,113 @@ def handle_anomaly(df, microRCA, timestamp):
     
     print(anomalous_hosts)
 
-    # >> Complex piece of logic here... 
-    # def host_to_key(host):
-    #     if 'docker_' in host: return 'dcos_docker'
-    #     if 'container_' in host: return 'dcos_container'
-    #     if 'db_' in host: return 'db_oracle_11g'
-    #     if 'redis_' in host: return 'mw_redis'
-    #     if 'os_' in host: return 'os_linux'
-    #     return host # 
-
-    # kpi_dict = dict(tuple(df['kpi'].groupby('cmdb_id')))
-    # for key in list(kpi_dict.keys()):
-    #     new_key = host_to_key(key)
-    #     kpi_dict[new_key] = kpi_dict.pop(key)
-
-    # print(kpi_dict)
-    # print(df['kpi'])
-    # # Run KPI anomaly detection for each host in order
-    # host_kpi_anomalies = []
-    # for host in anomalous_hosts:
-    #     print('Running KPI detection on host', host)
-
-    #     problems = kpi_detection.find_anom(host, {host_to_key(host): df['kpi']})
-    #     host_kpi_anomalies.append(problems)
-    
-    # print(host_kpi_anomalies)
-
-    # if no host is anomalus, do submit the first from the list with None
-    # NOTE: Do we just select one? The submit function also accepts a list of [(host, kpi), (host, kpi),...]
     if SERVER_CONFIGURATION["SUBMIT_IP"] is not None:
         
         submit(anomalous_hosts) 
 
+df = {
+        'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
+        'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid','cmdb_id','serviceName','callType']), 
+        'kpi': pd.DataFrame(columns=['item_id','name','bomc_id','timestamp','value','cmdb_id'])
+    }
+
+df_lock = threading.Lock()
+
+def analyzer(esb_array, trace_array, kpi_array):
+    print_sep()
+    esb = pd.concat(map(lambda esb: esb.to_dataframe(), esb_array))
+
+    try:
+        trace = pd.concat(map(lambda trace: trace.to_dataframe(), trace_array))
+    except ValueError:
+        print('No trace data available. Using empty dataframe...')
+        trace = pd.DataFrame()
+
+    try:
+        kpi = pd.concat(map(lambda kpi: kpi.to_dataframe(), kpi_array))
+    except:
+        print('No kpi data available. Using empty dataframe...')
+        kpi = pd.DataFrame()
+
+
+
+
+    with df_lock:
+        df['esb'] = pd.concat([df['esb'], esb], ignore_index=True).sort_values('startTime')
+        df['trace'] = pd.concat([df['trace'], trace], ignore_index=True)
+        df['kpi'] = pd.concat([df['kpi'], kpi], ignore_index=True)
+    
+
+    window_size_ms = 1000 * 60 * 10 # window size: 5min
+    timestamp = int(df['esb'].iloc[-1]['startTime'])
+
+    print(f'Time is {timestamp}')
+    # remove from all dfs
+    for key in df:
+        print(f'[DEBUG] Size of dataframe {key} was {len(df[key])}')
+        dataframe = df[key]
+        if (key == 'kpi'):
+            df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*6]
+        else:
+            df[key] = dataframe[dataframe['startTime'] >= timestamp - window_size_ms]
+        print(f'[DEBUG] Size of dataframe {key} is now {len(df[key])}')
+          
+
+    print_sep()
+    esb_is_anomalous = esb_heur.find_anom(df['esb'])
+
+    if(esb_is_anomalous):
+        print('ESB anomaly detected')
+        print_sep()
+        print('Running microRCA...')
+        t = threading.Thread(target=handle_anomaly, args=(df,microRCA, df['esb'].iloc[-1]['startTime']))
+        t.start()
+        # TODO do we need to wait for it?
+    else:
+        print('No ESB anomaly')
+
+
+    del esb
+    del trace
+    del kpi
 
 def main():
     '''Consume data and react'''
     # Check authorities
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
 
-    df = {
-        'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
-        'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid','cmdb_id','serviceName','callType']), 
-        'kpi': pd.DataFrame(columns=['item_id','name','bomc_id','timestamp','value','cmdb_id'])
-    }
-    # Initialize the MicroRCA detector
-    microRCA = MicroRCA()
+    esb_data = []
+    trace_data = []
+    kpi_data = []
+
     i = 0
     print(f'Starting connection with server at {SERVER_CONFIGURATION["KAFKA_QUEUE"]}')
     for message in CONSUMER:
         i += 1
         data = json.loads(message.value.decode('utf8'))
         if message.topic == 'platform-index':
-            # data['body'].keys() is supposed to be
-            # ['os_linux', 'db_oracle_11g', 'mw_redis', 'mw_activemq',
-            #  'dcos_container', 'dcos_docker']
-            new_df = pd.concat(map(lambda x: x.to_dataframe(), [PlatformIndex(item) for stack in data['body'] for item in data['body'][stack]]))
-            df['kpi'] = pd.concat([df['kpi'],new_df], ignore_index=True)
+            extra_kpis = [PlatformIndex(item) for stack in data['body'] for item in data['body'][stack]]
+            kpi_data.extend(extra_kpis)
 
         elif message.topic == 'business-index':
-            # data['body'].keys() is supposed to be ['esb', ]
-            print_sep()
-            print(f'Received {data}')
-            new_df = pd.concat(map(lambda x: x.to_dataframe(), [BusinessIndex(item) for key in data['body'] for item in data['body'][key]]))
-            df['esb'] = pd.concat([df['esb'],new_df], ignore_index=True).sort_values('startTime')
+            print(f'Handling ESB...')
+            new_business_data = [BusinessIndex(item) for key in data['body'] for item in data['body'][key]]
+            esb_data.extend(new_business_data)
 
-            window_size_ms = 1000 * 60 * 10 # window size: 5min
-            timestamp = int(df['esb'].iloc[-1]['startTime'])
-    
-            print(f'Time is {timestamp}')
-            # remove from all dfs
-            for key in df:
-                print(f'[DEBUG] Size of dataframe {key} was {len(df[key])}')
-                dataframe = df[key]
-                if (key == 'kpi'):
-                    df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*6]
-                else:
-                    df[key] = dataframe[dataframe['startTime'] >= timestamp - window_size_ms]
-                print(f'[DEBUG] Size of dataframe {key} is now {len(df[key])}')
-          
+            # Start new thread to analyze
+            threading.Thread(target=analyzer, args=(esb_data, trace_data, kpi_data)).start()
 
-            # Detect anomalies on esb with seasonality decomposition
-            print_sep()
-            esb_is_anomalous = esb_heur.find_anom(df['esb'])
-
-            if(esb_is_anomalous):
-                print('ESB anomaly detected')
-                print_sep()
-                print('Running microRCA...')
-                t = threading.Thread(target=handle_anomaly, args=(df,microRCA, df['esb'].iloc[-1]['startTime']))
-                t.start()
-                # TODO do we need to wait for it?
-            else:
-                print('No ESB anomaly')
+            # Empty global ones 
+            esb_data = []
+            trace_data = []
+            kpi_data = []
 
         else:  # message.topic == 'trace'
-
-            new_df = Trace(data).to_dataframe() 
-            df['trace'] = pd.concat([df['trace'],new_df], ignore_index=True)
+            trace_data.append(Trace(data))
 
 
 
 if __name__ == '__main__':
+    # Initialize the MicroRCA detector
+    microRCA = MicroRCA()
     main()
