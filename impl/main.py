@@ -7,7 +7,8 @@ import os
 import pandas as pd
 import requests
 from kafka import KafkaConsumer
-
+import time
+import csv
 import threading
 
 # from models.esb_detection.vae import detect as esb_vae
@@ -84,7 +85,38 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
     def to_dataframe(self):
         return pd.DataFrame.from_dict(self.__dict__)
 
-def submit(ctx):
+anomaly_detection_time = None
+anomaly_list = []
+ANOMALY_FILENAME = 'anomalies_list.csv'
+def submit(ctx, timestamp):
+    global anomaly_detection_time
+    global anomaly_list
+    global ANOMALY_FILENAME
+    
+    now = time.time()
+    if anomaly_detection_time == None:
+        anomaly_detection_time = now
+    elif now - anomaly_detection_time >= 1000*60*10 and timestamp - anomaly_detection_time <= 1000*60*10:
+        # not found on time
+        print(f'[INFO] Submission of {ctx} failed timeframe')
+        return 
+    elif now - anomaly_detection_time <= 1000*60*10:
+        # valid submission but need to add extra data
+        if not any(map(lambda x: x in anomaly_list, ctx)):
+            print(f'[INFO] No new elements in {ctx} to add to submission. Skipping...')
+            return
+        anomaly_list.extend(list(filter(lambda x: x not in anomaly_list, ctx)))
+        ctx = anomaly_list
+    else:
+        # new submission window
+        # save result to file
+        with open(ANOMALY_FILENAME, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow([anomaly_detection_time, *anomaly_list])
+
+        anomaly_detection_time = timestamp
+        anomaly_list = ctx
+
     '''Submit answer into stdout'''
     # print(json.dumps(data))
     assert (isinstance(ctx, list))
@@ -97,7 +129,7 @@ def submit(ctx):
     r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
 
-def handle_anomaly(df, microRCA, timestamp):
+def handle_anomaly(df, microRCA, timestamp, detection_timestamp):
     # Local testing only. Load some sample data
     if SERVER_CONFIGURATION["SUBMIT_IP"] is None:
         micro_rca_data_dir = os.path.join('models','trace_localisation','microrca','data')
@@ -114,8 +146,7 @@ def handle_anomaly(df, microRCA, timestamp):
     print(anomalous_hosts)
 
     if SERVER_CONFIGURATION["SUBMIT_IP"] is not None:
-        
-        submit(anomalous_hosts) 
+        submit(anomalous_hosts, detection_timestamp) 
 
 df = {
         'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
@@ -141,16 +172,13 @@ def analyzer(esb_array, trace_array, kpi_array):
         print('No kpi data available. Using empty dataframe...')
         kpi = pd.DataFrame()
 
-
-
-
     with df_lock:
         df['esb'] = pd.concat([df['esb'], esb], ignore_index=True).sort_values('startTime')
         df['trace'] = pd.concat([df['trace'], trace], ignore_index=True)
         df['kpi'] = pd.concat([df['kpi'], kpi], ignore_index=True)
     
 
-    window_size_ms = 1000 * 60 * 10 # window size: 5min
+    window_size_ms = 1000 * 60 * 5 # window size: 5min
     timestamp = int(df['esb'].iloc[-1]['startTime'])
 
     print(f'Time is {timestamp}')
@@ -159,7 +187,7 @@ def analyzer(esb_array, trace_array, kpi_array):
         print(f'[DEBUG] Size of dataframe {key} was {len(df[key])}')
         dataframe = df[key]
         if (key == 'kpi'):
-            df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*6]
+            df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*12]
         else:
             df[key] = dataframe[dataframe['startTime'] >= timestamp - window_size_ms]
         print(f'[DEBUG] Size of dataframe {key} is now {len(df[key])}')
@@ -172,12 +200,11 @@ def analyzer(esb_array, trace_array, kpi_array):
         print('ESB anomaly detected')
         print_sep()
         print('Running microRCA...')
-        t = threading.Thread(target=handle_anomaly, args=(df,microRCA, df['esb'].iloc[-1]['startTime']))
+        t = threading.Thread(target=handle_anomaly, args=(df,microRCA, df['esb'].iloc[-1]['startTime'], timestamp))
         t.start()
         # TODO do we need to wait for it?
     else:
         print('No ESB anomaly')
-
 
     del esb
     del trace
