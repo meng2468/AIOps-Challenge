@@ -107,7 +107,7 @@ class MicroRCA:
             nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
             plt.show()
 
-        print(nx.is_weakly_connected(DG))
+        print(f'[DEBUG] Graph is {"connected" if nx.is_weakly_connected(DG) else "not connected"}')
         # Extract anomalous subgraph
         anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
 
@@ -157,11 +157,6 @@ class MicroRCA:
         
         hosts = trace['cmdb_id'].unique()
         services = trace['serviceName'].unique()
-
-        # print(30*'-')
-        # print(hosts, len(hosts))
-        # print(services, len(services))
-        # print(30*'-')
 
         # Add nodes to the graph
         for node in hosts:
@@ -217,9 +212,10 @@ class MicroRCA:
             
             if changed:
                 anomalous_graph.add_node(node, status='anomaly', type=graph.nodes[node]['type'])
-        pprint(anomalous_edges)
-        pprint(list(anomalous_graph.nodes))
+        print(f"[DEBUG] Anomalous edges are {anomalous_edges}")
+        
         anomalous_nodes = list(anomalous_graph.nodes)
+        print(f"[DEBUG] Anomalous nodes are {anomalous_nodes}")
         for node in anomalous_nodes:
             for n in graph.predecessors(node):
                 if n not in anomalous_graph.nodes:
@@ -244,8 +240,6 @@ class MicroRCA:
             if anomalous_graph.nodes[node]['type'] == 'service':
                 avg = trace_df[trace_df['serviceName'] == node]['elapsedTime'].mean()
                 anomalous_graph.nodes[node]['rt'] = avg
-        pprint(list(anomalous_graph.nodes(data=True)))
-        pprint(list(anomalous_graph.edges(data=True)))
         return anomalous_graph, anomalous_edges
 
     def get_max_correlation(self, times, host_kpi_df):
@@ -333,7 +327,7 @@ class MicroRCA:
             personalization[v] = val / graph.degree(v) # why do they do this in the original code?
             graph.nodes[v]['most_probable_host'] = most_prob_host
             graph.nodes[v]['kpi_name'] = kpi_name
-        print(personalization)
+        print(f'[DEBUG] Personalization vector: {personalization}')
         anomalous = any(map(lambda x: x > 0, personalization.values()))
         # if not anomalous:
         #     raise ValueError('No anomaly could be found.')
@@ -350,7 +344,7 @@ class MicroRCA:
             max_iter=self.page_rank_max_iter
         )
         scores = sorted(filter(lambda x: x[1] > 0, scores.items()), key=lambda x: x[1], reverse=True)
-        print(f'Scores {scores}')
+        print(f'[DEBUG] Scores {scores}')
         hosts = list(filter(lambda x: x[1]['type'] == 'host', graph.nodes(data=True)))
         
         max_score = max(map(lambda x: x[1], scores))

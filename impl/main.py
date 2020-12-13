@@ -174,14 +174,18 @@ def main():
             df['esb'] = pd.concat([df['esb'],new_df], ignore_index=True).sort_values('startTime')
 
             window_size_ms = 1000 * 60 * 10 # window size: 5min
-            timestamp = int(df['esb'].iloc[-1]['startTime']) - window_size_ms # check the most recent
+            timestamp = int(df['esb'].iloc[-1]['startTime'])
     
+            print(f'Time is {timestamp}')
             # remove from all dfs
             for key in df:
+                print(f'[DEBUG] Size of dataframe {key} was {len(df[key])}')
                 dataframe = df[key]
                 if (key == 'kpi'):
-                    df[key] = dataframe[dataframe['timestamp'] >= timestamp*6]
-                df[key] = dataframe[dataframe['startTime' if key != 'kpi'] >= timestamp]
+                    df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*6]
+                else:
+                    df[key] = dataframe[dataframe['startTime'] >= timestamp - window_size_ms]
+                print(f'[DEBUG] Size of dataframe {key} is now {len(df[key])}')
           
 
             # Detect anomalies on esb with seasonality decomposition

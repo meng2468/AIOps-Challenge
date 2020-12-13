@@ -23,11 +23,11 @@ if __name__ == '__main__':
     def get_json(start):
         delta_time = int(time.time() - start) * 1000
         json_object = json.dumps(
-        {   "startTime":16666587823 + delta_time,
+        {   "startTime":1606862220032 + delta_time,
             "body": { 
                 "esb": [{
                     "serviceName": "test",
-                    "startTime": 1606881660000 + delta_time,
+                    "startTime": 1606862220032 + delta_time,
                     "avg_time": 1.53,
                     "num": 350,
                     "succee_num": 175,
@@ -42,4 +42,4 @@ if __name__ == '__main__':
     while True:
         producer.send('business-index', value=get_json(start))
         print('ZZZZzzzz')
-        sleep(5)
+        sleep(10)
