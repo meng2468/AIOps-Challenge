@@ -202,7 +202,6 @@ def main():
             kpi_data.extend(extra_kpis)
 
         elif message.topic == 'business-index':
-            print(f'Handling ESB...')
             new_business_data = [BusinessIndex(item) for key in data['body'] for item in data['body'][key]]
             esb_data.extend(new_business_data)
 
