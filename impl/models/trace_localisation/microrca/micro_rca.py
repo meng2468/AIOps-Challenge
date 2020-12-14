@@ -58,6 +58,8 @@ class MicroRCA:
 
 
     def detect(self, traces_df, kpis, visualize=False):
+        traces_df = self.process(traces_df)
+
         # Parse the traces and kpis
         parsed_traces = self.parse_traces(traces_df)
         
@@ -68,23 +70,6 @@ class MicroRCA:
         #   1.1 microRCA
 
         traces = self.get_anomalous_traces(traces_df)
-
-        for trace in traces:
-            trace_df = parsed_traces[trace]
-            trace_df = trace_df.reset_index()
-
-            csf = trace_df[trace_df['callType'] == 'CSF']['id'].index
-            
-            for i in csf:
-                try:
-                    trace_df.at[i, 'cmdb_id'] = trace_df[trace_df['pid'] == trace_df.iloc[i]['id']]['cmdb_id'].iloc[0]
-                except:
-                    pass # root
-            
-            
-            parsed_traces[trace] = trace_df
-
-        
         
         # Hosts + Service
         # Each service connects to all the services it communicates with and all hosts it connects to (no need to differentiate!)
@@ -125,6 +110,29 @@ class MicroRCA:
         result = self.get_fault_service(anomaly_DG, anomalous_edges, traces_df, parsed_kpis)
 
         return result
+
+    def process(self, traces_df):
+        ids = traces_df[traces_df['callType'] == 'CSF']
+        
+        relationship = {}
+        
+        def parse(row):
+            # parent -> child
+            if row['pid'] in ids:
+                relationship[row['pid']] = row['cmdb_id']
+                
+
+        def apply(row):
+            # parent -> new_parent
+            if row['callType'] != 'CSF':
+                return row
+            else:
+                if row['id'] in relationship:
+                    row['cmdb_id'] = relationship[row['id']]
+                return row
+
+        traces_df.apply(parse, axis=1)
+        return traces_df.apply(apply, axis=1)
 
     def get_anomalous_traces(self, tracelist):
         """
@@ -370,8 +378,8 @@ if __name__ == '__main__':
     # load trace data
     # load kpi
 
-    traces = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_trace2.csv').drop(['Unnamed: 0'], axis=1)
-    kpis = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_kpis2.csv').drop(['Unnamed: 0'], axis=1)
+    traces = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_trace.csv').drop(['Unnamed: 0'], axis=1)
+    kpis = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_kpis.csv').drop(['Unnamed: 0'], axis=1)
 
     # print(traces)
 
