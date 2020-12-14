@@ -249,14 +249,24 @@ class MicroRCA:
         """ Returns absolute value of correlation """
         max_corr = 0
         key = None
+        correct_times = pd.Series(list(times))
+
         for k in host_kpi_df['name'].unique():
             serie = host_kpi_df[host_kpi_df['name'] == k]['value']
             if len(serie.index) == 1 or serie.var() == 0:
                 continue
             
-            corr = serie.corr(times) # FIXME divide by zero sometimes?
+            count = round(len(correct_times) / len(serie) + 0.5)
+            correct_serie = pd.Series(list(serie))
+            correct_serie = correct_serie.repeat(count)
+            correct_serie = correct_serie.reset_index(drop=True)
+
+            correct_serie = correct_serie[:len(correct_times)] # trim to correct length
+
+            corr = correct_serie.corr(correct_times) # FIXME divide by zero sometimes?
 
             if math.isnan(corr): # in case kpis don't vary
+                print('[ERROR] THIS SHOULD NOT HAPPEN LINE 269')
                 corr = 0
             
             corr = abs(corr)
@@ -373,8 +383,8 @@ if __name__ == '__main__':
     # load trace data
     # load kpi
 
-    traces = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_trace.csv').drop(['Unnamed: 0'], axis=1)
-    kpis = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/impl/models/trace_localisation/microrca/data/small_kpis.csv').drop(['Unnamed: 0'], axis=1)
+    traces = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/data/labeled_data/AIOps挑战赛数据/2020_04_11/2020_04_11/test1/traces.csv').drop(['Unnamed: 0'], axis=1)
+    kpis = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/data/labeled_data/AIOps挑战赛数据/2020_04_11/2020_04_11/test1/kpis.csv').drop(['Unnamed: 0'], axis=1)
 
     # print(traces)
 
