@@ -90,6 +90,7 @@ def submit(ctx, timestamp):
     global ANOMALY_FILENAME
 
     with open(ANOMALY_FILENAME, 'a') as f:
+        print(f'[INFO][{timestamp}] Writing new result to file: {ctx}')
         writer = csv.writer(f)
         writer.writerow([timestamp, time.time(), *ctx])
 
