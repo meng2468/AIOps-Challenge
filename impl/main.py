@@ -85,37 +85,13 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
     def to_dataframe(self):
         return pd.DataFrame.from_dict(self.__dict__)
 
-anomaly_detection_time = None
-anomaly_list = []
 ANOMALY_FILENAME = 'anomalies_list.csv'
 def submit(ctx, timestamp):
-    global anomaly_detection_time
-    global anomaly_list
     global ANOMALY_FILENAME
-    
-    now = time.time()
-    if anomaly_detection_time == None:
-        anomaly_detection_time = now
-    elif now - anomaly_detection_time >= 1000*60*10 and timestamp - anomaly_detection_time <= 1000*60*10:
-        # not found on time
-        print(f'[INFO] Submission of {ctx} failed timeframe')
-        return 
-    elif now - anomaly_detection_time <= 1000*60*10:
-        # valid submission but need to add extra data
-        if all(map(lambda x: x in anomaly_list, ctx)):
-            print(f'[INFO] No new elements in {ctx} to add to submission. Skipping...')
-            return
-        anomaly_list.extend(list(filter(lambda x: x not in anomaly_list, ctx)))
-        ctx = anomaly_list
-    else:
-        # new submission window
-        # save result to file
-        with open(ANOMALY_FILENAME, 'a') as f:
-            writer = csv.writer(f)
-            writer.writerow([anomaly_detection_time, *anomaly_list])
 
-        anomaly_detection_time = timestamp
-        anomaly_list = ctx
+    with open(ANOMALY_FILENAME, 'a') as f:
+        writer = csv.writer(f)
+        writer.writerow([timestamp, time.time(), *ctx])
 
     '''Submit answer into stdout'''
     # print(json.dumps(data))
@@ -128,8 +104,22 @@ def submit(ctx, timestamp):
     data = {'content': json.dumps(ctx)}
     r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
+last_anomaly_timestamp = None
+timestamp_lock = threading.Lock()
+def handle_anomaly(df, microRCA, timestamp):
+    global last_anomaly_timestamp
 
-def handle_anomaly(df, microRCA, timestamp, detection_timestamp):
+    with timestamp_lock:
+        if last_anomaly_timestamp is None:
+            last_anomaly_timestamp = timestamp
+            print(f'[INFO] Timestamp was None, assign {timestamp}')
+        elif timestamp - last_anomaly_timestamp < 1000*60*5: # Last anomaly was detected less than 5 min ago
+            print(f'[INFO] Last anomaly was detected less than 5 min ago, skipping... {timestamp}')
+            return 
+        else: # Last anomaly was detected more than 5 min ago
+            print(f'[INFO] New timestamp, assign {timestamp}')
+            last_anomaly_timestamp = timestamp
+
     # Local testing only. Load some sample data
     if SERVER_CONFIGURATION["SUBMIT_IP"] is None:
         micro_rca_data_dir = os.path.join('models','trace_localisation','microrca','data')
@@ -146,7 +136,7 @@ def handle_anomaly(df, microRCA, timestamp, detection_timestamp):
     print(anomalous_hosts)
 
     if SERVER_CONFIGURATION["SUBMIT_IP"] is not None:
-        submit(anomalous_hosts, detection_timestamp) 
+        submit(anomalous_hosts, timestamp) 
 
 df = {
         'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
@@ -200,7 +190,7 @@ def analyzer(esb_array, trace_array, kpi_array):
         print('ESB anomaly detected')
         print_sep()
         print('Running microRCA...')
-        t = threading.Thread(target=handle_anomaly, args=(df,microRCA, df['esb'].iloc[-1]['startTime'], timestamp))
+        t = threading.Thread(target=handle_anomaly, args=(df,microRCA,timestamp))
         t.start()
         # TODO do we need to wait for it?
     else:
