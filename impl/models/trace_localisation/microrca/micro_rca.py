@@ -276,6 +276,15 @@ class MicroRCA:
 
         return max_corr, key
 
+    def service_to_service_correlation(self, time1, time2):
+        time1 = time1.sort_values('startTime')['elapsedTime']
+        time2 = time2.sort_values('startTime')['elapsedTime']
+        size = min(len(time1),len(time2))
+        time1 = time1[-size:].reset_index(drop=True)
+        time2 = time2[-size:].reset_index(drop=True)
+
+        return abs(time1.corr(time2))
+
     def get_fault_service(self, graph, anomalous_edges, traces, kpis):
         for v in graph.nodes:
             if graph.nodes[v]['status'] != 'anomaly':
@@ -283,14 +292,21 @@ class MicroRCA:
             in_val = 0
             for edge in graph.in_edges(v):
                 src, _ = edge
-                weight = self.weights_alpha if edge in anomalous_edges else traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == src]['elapsedTime'])
+                if edge in anomalous_edges:
+                    weight = self.weights_alpha  
+                else: 
+                    weight = self.service_to_service_correlation(
+                        traces[traces['serviceName'] == v],
+                        traces[traces['serviceName'] == src]
+                    )
                 if math.isnan(weight): # in case kpis don't vary
+                    print('[ERROR] THIS SHOULD NOT HAPPEN LINE 288')
                     weight = 0
 
                 in_val += weight
                 # new_edge = (src, v, {'weight': round(weight,3)})
             
-                nx.set_edge_attributes(graph, {(src, v) : {'weight' : round(weight,3)}})
+                nx.set_edge_attributes(graph, {(src, v) : {'weight' : weight}})
             
             in_val /= graph.in_degree(v)
 
@@ -299,8 +315,12 @@ class MicroRCA:
                 if (edge in anomalous_edges):
                     continue
                 if graph.nodes[dst]['type'] == 'service':
-                    val = traces[traces['serviceName'] == v]['elapsedTime'].corr(traces[traces['serviceName'] == dst]['elapsedTime'])
+                    val = self.service_to_service_correlation(
+                        traces[traces['serviceName'] == v],
+                        traces[traces['serviceName'] == dst]
+                    )
                     if math.isnan(val): # in case kpis don't vary
+                        print('[ERROR] THIS SHOULD NOT HAPPEN LINE 305')
                         val = 0
                 else: # host
                     kpi = kpis[dst]
@@ -308,8 +328,10 @@ class MicroRCA:
                     times = traces[traces['serviceName'] == v]['elapsedTime']
                     max_corr, _ = self.get_max_correlation(times, kpi)
                     val = in_val * max_corr
-                nx.set_edge_attributes(graph, {(v, dst) : {'weight' : round(val,3)}})
+                nx.set_edge_attributes(graph, {(v, dst) : {'weight' : val}})
         
+        # pprint(list(graph.edges(data=True)))
+
         personalization = {}
         for v in graph.nodes:
             if graph.nodes[v]['status'] != 'anomaly':
@@ -331,7 +353,7 @@ class MicroRCA:
             for key in keys:
                 kpi_df = kpis[key[1]]
                 val, kpi = self.get_max_correlation(times, kpi_df)
-                if val >= max_corr:
+                if val > max_corr:
                     most_prob_host = key[1]
                     max_corr = val
                     kpi_name = kpi
@@ -340,6 +362,7 @@ class MicroRCA:
             personalization[v] = val / graph.degree(v) # why do they do this in the original code?
             graph.nodes[v]['most_probable_host'] = most_prob_host
             graph.nodes[v]['kpi_name'] = kpi_name
+
         print(f'[DEBUG] Personalization vector: {personalization}')
         anomalous = any(map(lambda x: x > 0, personalization.values()))
         # if not anomalous:
@@ -349,6 +372,19 @@ class MicroRCA:
             personalization = dict(map(lambda x: (x, 1/N), personalization))
 
         reversed_graph = graph.reverse(copy=True)
+        
+        # transform hosts to have only in_edges
+        for node in reversed_graph.nodes:
+            if reversed_graph.nodes[node]['type'] != 'host':
+                continue
+
+            edges = list(reversed_graph.out_edges(node))
+            for edge in edges:
+                src, dst = edge
+                data = reversed_graph.get_edge_data(src, dst)
+                reversed_graph.add_edge(dst, src, **data)
+                reversed_graph.remove_edge(src,dst)
+                
 
         scores = nx.pagerank(
             reversed_graph, 
