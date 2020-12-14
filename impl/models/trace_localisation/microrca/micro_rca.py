@@ -94,7 +94,7 @@ class MicroRCA:
 
         print(f'[DEBUG] Graph is {"connected" if nx.is_weakly_connected(DG) else "not connected"}')
         # Extract anomalous subgraph
-        anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces, traces_df)
+        anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces)
 
         if nx.is_empty(anomaly_DG):
             raise ValueError('No anomaly detected')
@@ -188,14 +188,14 @@ class MicroRCA:
 
         return DG
 
-    def get_anomalous_graph(self, graph, anomalousids, traces, trace_df):
+    def get_anomalous_graph(self, graph, anomalousids, traces):
         anomalous_nodes = set()
         
         def detect_nodes(row):
             # {k -> v} k = serviceName + callType 
             model = self.detectors[row.loc['serviceName'] + row.loc['callType']]
             prediction = model.predict(np.array(row['elapsedTime']).reshape(-1,1))
-            if prediction != model.anomaly_index: # anomaly_index is inverted. It signals the normal index!!!
+            if prediction != model.anomaly_index: # FIXME anomaly_index is inverted. It signals the normal index!!!
                 anomalous_nodes.add(row.loc['serviceName'])
 
         # find anomalous nodes
@@ -243,11 +243,6 @@ class MicroRCA:
                 if n != node:
                     anomalous_graph.add_edge(node, n)
             
-        
-        for node in anomalous_graph.nodes:
-            if anomalous_graph.nodes[node]['type'] == 'service':
-                avg = trace_df[trace_df['serviceName'] == node]['elapsedTime'].mean()
-                anomalous_graph.nodes[node]['rt'] = avg
         return anomalous_graph, anomalous_edges
 
     def get_max_correlation(self, times, host_kpi_df):
