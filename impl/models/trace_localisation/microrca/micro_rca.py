@@ -5,6 +5,8 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from sklearn.preprocessing import StandardScaler
+
 from collections import defaultdict
 
 import os
@@ -81,18 +83,19 @@ class MicroRCA:
             print(DG.nodes(data=True), len(DG.nodes()))
 
             plt.figure(figsize=(9,9))
-            pos = nx.spring_layout(DG)
-            nx.draw(DG, pos, with_labels=True, cmap=plt.get_cmap('jet'), node_size=0, arrows=True)
-
+            #pos = nx.spring_layout(DG)
+            # pos = nx.draw_shell(DG)
+            # nx.draw(DG, pos, with_labels=True, cmap=plt.get_cmap('jet'), node_size=0, arrows=True)
+            nx.draw_shell(DG, with_labels=True)
             # nx.draw_networkx_nodes(DG, pos, nodelist=hosts, node_color="r", node_size=1500)
             # nx.draw_networkx_nodes(DG, pos, nodelist=services, node_color="b", node_size=500)
-            nx.draw_networkx_edges(DG, pos, width=1.0, alpha=0.5)
+            # nx.draw_networkx_edges(DG, pos, width=1.0, alpha=0.5)
 
             labels = nx.get_edge_attributes(DG, 'weight')
-            nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
-            plt.show()
+            # nx.draw_networkx_edge_labels(DG, pos, edge_labels=labels)
+            plt.savefig('output.png')
 
-        print(f'[DEBUG] Graph is {"connected" if nx.is_weakly_connected(DG) else "not connected"}')
+        # print(f'[DEBUG] Graph is {"connected" if nx.is_weakly_connected(DG) else "not connected"}')
         # Extract anomalous subgraph
         anomaly_DG, anomalous_edges = self.get_anomalous_graph(DG, traces, parsed_traces)
 
@@ -220,10 +223,10 @@ class MicroRCA:
             
             if changed:
                 anomalous_graph.add_node(node, status='anomaly', type=graph.nodes[node]['type'])
-        print(f"[DEBUG] Anomalous edges are {anomalous_edges}")
+        # print(f"[DEBUG] Anomalous edges are {anomalous_edges}")
         
         anomalous_nodes = list(anomalous_graph.nodes)
-        print(f"[DEBUG] Anomalous nodes are {anomalous_nodes}")
+        # print(f"[DEBUG] Anomalous nodes are {anomalous_nodes}")
         for node in anomalous_nodes:
             for n in graph.predecessors(node):
                 if n not in anomalous_graph.nodes:
@@ -245,20 +248,29 @@ class MicroRCA:
             
         return anomalous_graph, anomalous_edges
 
+    def get_transformation(self, series):
+        scaler = StandardScaler()
+        val = series.values.reshape(-1,1)
+        return pd.Series(scaler.fit_transform(val)[:,0])
+
     def get_max_correlation(self, times, host_kpi_df):
         """ Returns absolute value of correlation """
+        kpi_list = ['container_cpu_used', 'Proc_User_Used_Pct', 'Proc_Used_Pct', 'Sess_Connect', 'On_Off_State', 'tnsping_result_time', 'Sent_queue', 'Received_queue']
         max_corr = 0
         key = None
-        correct_times = pd.Series(list(times))
+        correct_times = self.get_transformation(pd.Series(list(times)))
 
         for k in host_kpi_df['name'].unique():
+            if k not in kpi_list:
+                continue
+
             serie = host_kpi_df[host_kpi_df['name'] == k]['value']
             if len(serie.index) == 1 or serie.var() == 0:
                 continue
             
             count = round(len(correct_times) / len(serie) + 0.5)
             correct_serie = pd.Series(list(serie))
-            correct_serie = correct_serie.repeat(count)
+            correct_serie = self.get_transformation(correct_serie.repeat(count))
             correct_serie = correct_serie.reset_index(drop=True)
 
             correct_serie = correct_serie[:len(correct_times)] # trim to correct length
@@ -280,8 +292,8 @@ class MicroRCA:
         time1 = time1.sort_values('startTime')['elapsedTime']
         time2 = time2.sort_values('startTime')['elapsedTime']
         size = min(len(time1),len(time2))
-        time1 = time1[-size:].reset_index(drop=True)
-        time2 = time2[-size:].reset_index(drop=True)
+        time1 = self.get_transformation(time1[-size:].reset_index(drop=True))
+        time2 = self.get_transformation(time2[-size:].reset_index(drop=True))
 
         return abs(time1.corr(time2))
 
@@ -330,7 +342,6 @@ class MicroRCA:
                     val = in_val * max_corr
                 nx.set_edge_attributes(graph, {(v, dst) : {'weight' : val}})
         
-        # pprint(list(graph.edges(data=True)))
 
         personalization = {}
         for v in graph.nodes:
@@ -363,7 +374,7 @@ class MicroRCA:
             graph.nodes[v]['most_probable_host'] = most_prob_host
             graph.nodes[v]['kpi_name'] = kpi_name
 
-        print(f'[DEBUG] Personalization vector: {personalization}')
+        # print(f'[DEBUG] Personalization vector: {personalization}')
         anomalous = any(map(lambda x: x > 0, personalization.values()))
         # if not anomalous:
         #     raise ValueError('No anomaly could be found.')
@@ -372,7 +383,7 @@ class MicroRCA:
             personalization = dict(map(lambda x: (x, 1/N), personalization))
 
         reversed_graph = graph.reverse(copy=True)
-        
+
         # transform hosts to have only in_edges
         for node in reversed_graph.nodes:
             if reversed_graph.nodes[node]['type'] != 'host':
@@ -393,22 +404,51 @@ class MicroRCA:
             max_iter=self.page_rank_max_iter
         )
         scores = sorted(filter(lambda x: x[1] > 0, scores.items()), key=lambda x: x[1], reverse=True)
-        print(f'[DEBUG] Scores {scores}')
-        hosts = list(filter(lambda x: x[1]['type'] == 'host', graph.nodes(data=True)))
-        
-        max_score = max(map(lambda x: x[1], scores))
-        result = set(map(lambda x: x[0], filter(lambda x: x[1] == max_score, scores)))
-        
-        final_hosts = set()
-        for service in result:
-            for host in hosts:
-                if (graph.has_edge(service, host[0])):
-                    final_hosts.add(host[0])
+        # print(f'[DEBUG] Scores {scores}')
+        hosts = list(filter(lambda x: x[1]['type'] == 'host', reversed_graph.nodes(data=True)))
+       
+        # p(h | s) = p(s)*p(s | h) / p(h)
 
-        # final hosts -> correlation
-        hosts_info = [[graph.nodes[node]['most_probable_host'], graph.nodes[node]['kpi_name']] for node in result]
-            
-        return hosts_info
+        total_sum = sum(map(lambda x: x[1], scores))
+        percentual_service = list(map(lambda x: (x[0], x[1] / total_sum), scores))
+
+        total_weights = 0
+        for host in hosts:
+            edges = reversed_graph.in_edges(host[0])
+            host_sum = sum([reversed_graph.get_edge_data(u,v)['weight'] for u,v in edges])
+            total_weights += host_sum
+            reversed_graph.nodes[host[0]]['host_sum'] = host_sum
+
+        
+        final_result = []
+        for host in hosts:
+            for service in scores:
+                if not reversed_graph.has_edge(service[0], host[0]):
+                    continue
+                weight = reversed_graph.get_edge_data(service[0], host[0])['weight']
+
+                if weight == 0:
+                    continue
+                
+                ph = reversed_graph.nodes[host[0]]['host_sum'] / total_weights
+                ps = service[1] / total_sum
+                
+                times = traces[traces['serviceName'] == service[0]]['elapsedTime']
+                final_result.append((host[0], service[0], self.get_max_correlation(times, kpis[host[0]])[1], ps * weight / ph))
+        
+
+        total_val = sum(map(lambda x: x[3], final_result))
+        percentual_results = list(map(lambda x: [*x[0:3], x[3] / total_val], final_result))
+        sorted_results = sorted(percentual_results, key=lambda x: -x[3]) #hosts_info #sorted(final_result, key=lambda x: x[2])
+        formatted_answer = []
+        cumsum = 0
+        for res in sorted_results:
+            formatted_answer.append([res[0],res[2]])
+            cumsum += res[3]
+            if cumsum > 0.8:
+                break
+
+        return formatted_answer
                 
                     
 
@@ -422,7 +462,6 @@ if __name__ == '__main__':
     traces = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/data/labeled_data/AIOps挑战赛数据/2020_04_11/2020_04_11/test1/traces.csv').drop(['Unnamed: 0'], axis=1)
     kpis = pd.read_csv('/mnt/c/Users/tiago/Documents/Uni/anm/anm-project/data/labeled_data/AIOps挑战赛数据/2020_04_11/2020_04_11/test1/kpis.csv').drop(['Unnamed: 0'], axis=1)
 
-    # print(traces)
 
     microRCA = MicroRCA()
 
