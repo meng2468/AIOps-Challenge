@@ -24,7 +24,7 @@ def get_past(df, curr_time, window_size):
             df_new = df_new.append(row, ignore_index=True)
     return df_new
 
-def get_thresh(host):
+def get_key_thresh(host):
     df_thresh = pd.read_csv('thresh.data')
     df_thresh = df_thresh[df_thresh.host==host]
 
@@ -38,7 +38,7 @@ def find_anoms(hosts, df):
     for host in hosts:
         start_host = time.time()
         print('*'*60)
-        print('Checking', host)
+        print('Checking ', host)
         thresholds = get_key_thresh(host)
         for kpi in thresholds:
             thresh = thresholds[kpi]
@@ -55,24 +55,31 @@ def find_anoms(hosts, df):
             if len(df_hk) == 0:
                 print('No valid data to use, skipping')
                 continue
-                
+            
+            if kpi == 'container_cpu_used':
+                print(df_hk.timestamp.apply(lambda x: np.datetime64(x, 'ms')), df_hk.value)
             data = get_past(df_hk, np.max(df_hk.timestamp.unique()), 30)['value']
+            data = np.concatenate([data, data])
+            
             if thresh == -1:
-                if sum(data[-10:-5]) > 0:
+                if data[-1] > 0:
                     print("Non-Zero Anomaly!")
                     anoms.append((host, kpi))
             elif np.isnan(thresh):
                 print('NaN, Skipping!')
             else:
-                outliers = od.predict(data.values)['data']
-                if np.sum(outliers['is_outlier'][-10:-5]) > 0:
+                outliers = od.predict(data)['data']
+                print(outliers['instance_score'])
+                if np.mean(data) == 0 or np.std(data) == 0:
+                    print("Mean is zero or std is zero")
+                    anoms.append((host,kpi))
+                if np.sum(outliers['is_outlier'][-31:-30]) > 0:
                     print(outliers['is_outlier'])
                     print("ST Threshold Anomaly!")
                     anoms.append((host,kpi))
         print(host, ' completed in ', time.time() - start_host)
     print('Completed detection of ', len(hosts), 'hosts in ', time.time() - start, 'seconds')
     return anoms
-
 
 
     
