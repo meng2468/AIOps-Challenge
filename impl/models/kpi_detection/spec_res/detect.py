@@ -70,17 +70,19 @@ def find_anoms(hosts, df):
             data = np.concatenate([data, data])
             
             if thresh == -1:
-                if data[-1] > 0:
-                    print("Non-Zero Anomaly!")
+                if sum(data[-3:]) > 0:
+                    print("Was expecting zero's, got something else, anomaly!")
                     anoms.append((host, kpi))
             elif np.isnan(thresh):
-                print('NaN, Skipping!')
+                if  np.std(data[-3:]) != 0:
+                    print('Anomaly, std should have been zero!')
+                    anoms.append((host, kpi))
             else:
                 outliers = od.predict(data)['data']
                 if np.mean(data) == 0 or np.std(data) == 0:
                     print("Mean is zero or std is zero")
                     anoms.append((host,kpi))
-                if np.sum(outliers['is_outlier'][-31:-30]) > 0:
+                if np.sum(outliers['is_outlier'][-27:-30]) > 0:
                     print("ST Threshold Anomaly!")
                     anoms.append((host,kpi))
         print(host, ' completed in ', time.time() - start_host)
