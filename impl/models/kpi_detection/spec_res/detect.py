@@ -1,7 +1,17 @@
 import pandas as pd
 import numpy as np
 
+import time
+import os
+
 from alibi_detect.od import SpectralResidual
+
+def load_test():
+    data_path = '../../../../data/test_data/host'
+    df = pd.DataFrame(['item_id','name','bomc_id','timestamp','value','cmdb_id'])
+    for file in os.listdir(data_path):
+        df = pd.concat([df, pd.read_csv(data_path+'/'+file)], ignore_index=True) 
+    return df
 
 def get_past(df, curr_time, window_size):
     step_size = 1000*60
@@ -50,14 +60,12 @@ def find_anoms(hosts, df):
                 n_est_points=5,
                 n_grad_points=5
             )
-            df_hk = df[df.cmdb_id == host][df.name == kpi]
+            df_hk = df[(df.cmdb_id == host) & (df.name == kpi)]
             
             if len(df_hk) == 0:
                 print('No valid data to use, skipping')
                 continue
-            
-            if kpi == 'container_cpu_used':
-                print(df_hk.timestamp.apply(lambda x: np.datetime64(x, 'ms')), df_hk.value)
+
             data = get_past(df_hk, np.max(df_hk.timestamp.unique()), 30)['value']
             data = np.concatenate([data, data])
             
@@ -69,18 +77,15 @@ def find_anoms(hosts, df):
                 print('NaN, Skipping!')
             else:
                 outliers = od.predict(data)['data']
-                print(outliers['instance_score'])
                 if np.mean(data) == 0 or np.std(data) == 0:
                     print("Mean is zero or std is zero")
                     anoms.append((host,kpi))
                 if np.sum(outliers['is_outlier'][-31:-30]) > 0:
-                    print(outliers['is_outlier'])
                     print("ST Threshold Anomaly!")
                     anoms.append((host,kpi))
         print(host, ' completed in ', time.time() - start_host)
     print('Completed detection of ', len(hosts), 'hosts in ', time.time() - start, 'seconds')
     return anoms
 
-
-    
+find_anoms(load_test().cmdb_id.unique(), load_test())
     
