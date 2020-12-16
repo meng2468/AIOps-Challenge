@@ -6,13 +6,6 @@ import os
 
 from alibi_detect.od import SpectralResidual
 
-def load_test():
-    data_path = '../../../../data/test_data/host'
-    df = pd.DataFrame(['item_id','name','bomc_id','timestamp','value','cmdb_id'])
-    for file in os.listdir(data_path):
-        df = pd.concat([df, pd.read_csv(data_path+'/'+file)], ignore_index=True) 
-    return df
-
 def get_past(df, curr_time, window_size):
     step_size = 1000*60
     df_new = pd.DataFrame(columns=['timestamp', 'value'])
@@ -89,5 +82,4 @@ def find_anoms(hosts, df):
     print('Completed detection of ', len(hosts), 'hosts in ', time.time() - start, 'seconds')
     return anoms
 
-find_anoms(load_test().cmdb_id.unique(), load_test())
     
