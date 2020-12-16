@@ -52,7 +52,6 @@ od = SpectralResidual(
 
 df_thresh = pd.DataFrame(columns=['key','name','host','thresh'])
 df_thresh = pd.read_csv('thresh.csv')
-check = False
 
 for key in dfs:
     print('*'*40)
@@ -60,12 +59,6 @@ for key in dfs:
     df = dfs[key]
     curr_time = np.max([np.max(dfs[k].timestamp.unique()) for k in dfs])
     for name in list(df.name.unique()):
-        if name == 'UndoTbs_Pct':
-            print(name, key)
-            check = True
-            continue
-        if not check:
-            continue
         df_n = df[df.name==name]
         for cmdb_id in list(df_n.cmdb_id.unique()):
             df_nc = df_n[df_n.cmdb_id == cmdb_id]
@@ -76,7 +69,7 @@ for key in dfs:
                 df_nc = get_past(df_nc, curr_time, 60*12)
                 df_nc = df_nc.set_index('timestamp')['value']
 
-                od.infer_threshold(df_nc.values, threshold_perc=99)
+                od.infer_threshold(df_nc.values, threshold_perc=99.9)
                 thresh = od.threshold
                 print("Threshold for ", name, cmdb_id, ' is ', thresh)
                 df_thresh = df_thresh.append({'key': key, 'name':name, 'host': cmdb_id, 'thresh': thresh}, ignore_index=True)

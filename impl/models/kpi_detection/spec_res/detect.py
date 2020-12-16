@@ -33,7 +33,6 @@ def is_anom(df, thresh, anom_time):
     df = get_past(df, anom_time, 30)
     return bool(od.predict(df['value'].values)['data']['is_outlier'][-1])
 
-
 def find_anom(host, dfs, anom_time):
     df_thresh = pd.read_csv('thresh.csv')
     key = ''
