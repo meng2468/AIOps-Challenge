@@ -1,6 +1,7 @@
 import pickle
 import networkx as nx
 
+from collections import defaultdict
 
 class Loud:
 
@@ -8,13 +9,14 @@ class Loud:
         graph_path='causality_graph.pickle',
         page_rank_alpha=0.85, 
         page_rank_max_iter=10000,
+        kpi_limit=20
     ):
         with open(graph_path, 'rb') as f:
             self.causality_graph = pickle.load(f)
         
         self.pagerank_alpha = page_rank_alpha
         self.max_pagerank_iter = page_rank_max_iter
-
+        self.kpi_limit = kpi_limit
             
 
     def get_subgraph(self, pairs):
@@ -47,6 +49,28 @@ class Loud:
             max_iter = self.max_pagerank_iter
         )
 
+    def root_cause_detection(self, kpis):
+        """
+            Main function for calculation of root cause
+            kpis : collection of pairs (host, kpi)
+            returns : most likely root cause
+        """
+        subgraph = self.get_subgraph(kpis)
+        
+        scoring = sorted(tuple(self.apply_pagerank(subgraph).items()), key=lambda x: -x[1])
+
+        scoring = scoring[:self.kpi_limit] # limits to a number of ocurring KPIs
+        
+        host_kpis = defaultdict(list)
+        
+        scoring = tuple(map(lambda x: x[0], scoring))
+        for val in scoring:
+            host,kpi = val.split(':')
+            host_kpis[host].append(kpi)
+        
+        #FIXME paper returns only the most likely host ?
+        return [(host, kpi) for host in host_kpis for kpi in host_kpis[host]] 
+
 
 if __name__ == '__main__':
     model = Loud()
@@ -56,3 +80,5 @@ if __name__ == '__main__':
     subgraph = model.get_subgraph(pairs)
 
     vector = model.apply_pagerank(subgraph)
+
+    print(model.root_cause_detection(pairs))
