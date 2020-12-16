@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
+import time
 from alibi_detect.od import SpectralResidual
 
 # Helper functions
@@ -51,9 +52,11 @@ od = SpectralResidual(
 )
 
 df_thresh = pd.DataFrame(columns=['key','name','host','thresh'])
-df_thresh = pd.read_csv('thresh.csv')
+# df_thresh = pd.read_csv('thresh.csv')
 
+start = time.time()
 for key in dfs:
+    start_key = time.time()
     print('*'*40)
     print(key)
     df = dfs[key]
@@ -69,8 +72,10 @@ for key in dfs:
                 df_nc = get_past(df_nc, curr_time, 60*12)
                 df_nc = df_nc.set_index('timestamp')['value']
 
-                od.infer_threshold(df_nc.values, threshold_perc=99.9)
+                od.infer_threshold(df_nc.values, threshold_perc=99.7)
                 thresh = od.threshold
                 print("Threshold for ", name, cmdb_id, ' is ', thresh)
                 df_thresh = df_thresh.append({'key': key, 'name':name, 'host': cmdb_id, 'thresh': thresh}, ignore_index=True)
         df_thresh.to_csv('thresh.csv',index=False)
+    print('Generation of', key, 'took', time.time() - start_key, 'seconds')
+print('Total generation took', time.time()-start_key, 'seconds')
