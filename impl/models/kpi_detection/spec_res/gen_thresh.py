@@ -4,78 +4,69 @@ import os
 
 import time
 from alibi_detect.od import SpectralResidual
+from datetime import datetime
 
-# Helper functions
 
-def get_data():
-    data_path = '../../../../data/train_data/host'
 
+def run_gen(perc):
+    data_path = '/Users/baconbaker/Documents/Studium/ANM/anm-project/data/train_data/host'
     dfs = {}
-    for file in os.listdir(data_path):
-        print('Reading ' + file)
-        dfs[file[:-4]] = pd.read_csv(data_path+'/'+file) 
-    return dfs
+    for path in os.listdir(data_path):
+        dfs[path[:-4]] = pd.read_csv(data_path+'/'+path)
 
-## Checks for minute-wise data, if a datapoint doesn't exist, the left-next non-null data point is taken
-def get_past(df, curr_time, window_size):
-    step_size = 1000*60
-    df_new = pd.DataFrame(columns=['timestamp', 'value'])
+    df_info = pd.read_csv('kpi_summary_info.data')
 
-    for time in [curr_time - step_size*x for x in range(window_size)][::-1]:
-        if len(df[df.timestamp == time]) == 0:
-            plug_time = np.max(df[df.timestamp < time]['timestamp'])
-            row = {}
-            row['timestamp'] = time
-            if len(df.loc[df.timestamp==plug_time, 'value']) == 0:
-                row['value'] = 0
-            else: 
-                row['value'] = df.loc[df.timestamp==plug_time, 'value'].values[0]
-            df_new = df_new.append(row, ignore_index=True)
-        else:
-            row = {}
-            row['timestamp'] = time
-            row['value'] = df.loc[df.timestamp==time, 'value'].values[0]
-            df_new = df_new.append(row, ignore_index=True)
-    
-    return df_new
+    window_size = 10
+    od = SpectralResidual(
+        window_amp=window_size,
+        window_local=window_size,
+        n_est_points=5,
+        n_grad_points=5
+    )
 
+    per1_kpis = df_info[(df_info.interval=='1min') & (df_info.is_flat == False)]['kpi'].unique()
+    per5_kpis = df_info[(df_info.interval=='5min') & ((df_info.is_flat == False))]['kpi'].unique()
 
-dfs = get_data()
+    df_thresh = pd.DataFrame(columns=['name','host','thresh'])
 
-window_size = 30
+    for df_name in dfs:
+        print('*'*50)
+        print('Running generation for', df_name)
+        interval = 0
+        start_key = time.time()
 
-od = SpectralResidual(
-    window_amp=window_size,
-    window_local=window_size,
-    n_est_points=5,
-    n_grad_points=5
-)
+        df = dfs[df_name]
+        kpis = dict(tuple(df.groupby(['cmdb_id', 'name'])))
+        res = {}
 
-df_thresh = pd.DataFrame(columns=['key','name','host','thresh'])
-# df_thresh = pd.read_csv('thresh.csv')
+        for key in kpis:
+            kpis[key]['timestamp'] = kpis[key]['timestamp'].apply(lambda x: datetime.fromtimestamp(x/1000.0))
+            kpis[key] = kpis[key].set_index('timestamp').sort_index()
 
-start = time.time()
-for key in dfs:
-    start_key = time.time()
-    print('*'*40)
-    print(key)
-    df = dfs[key]
-    curr_time = np.max([np.max(dfs[k].timestamp.unique()) for k in dfs])
-    for name in list(df.name.unique()):
-        df_n = df[df.name==name]
-        for cmdb_id in list(df_n.cmdb_id.unique()):
-            df_nc = df_n[df_n.cmdb_id == cmdb_id]
-            if np.mean(df_nc['value'].values) == 0 or np.mean(get_past(df_nc, curr_time, 60*12).value.values) == 0:
-                print("Zero data for ", name, cmdb_id, ' skipping')
-                df_thresh = df_thresh.append({'key': key, 'name':name, 'host': cmdb_id, 'thresh': -1}, ignore_index=True)
+        print('Calculating rolling window')
+        for key in kpis: 
+            if kpis[key]['value'].std() == 0:
+                continue
+            elif key[1] in per1_kpis:
+                d = kpis[key]['value'].resample('T').mean().interpolate()
+            elif key[1] in per5_kpis:
+                d = kpis[key]['value'].resample('5T').mean().interpolate()
             else:
-                df_nc = get_past(df_nc, curr_time, 60*12)
-                df_nc = df_nc.set_index('timestamp')['value']
+                continue
+            d = (d - d.mean())/d.std()
+            res[key] = d.rolling(10).mean()
+        
+        for key in res:
+            print('Determining threshold for', key)
+            d = res[key].dropna()
+            if len(res[key]) == 0:
+                print("ITS EMPTY", key)
+                continue
+            od.infer_threshold(d, threshold_perc=perc)
+            thresh = od.threshold
+            df_thresh = df_thresh.append({'name':key[1], 'host': key[0], 'thresh': thresh}, ignore_index=True)
 
-                od.infer_threshold(df_nc.values, threshold_perc=99.7)
-                thresh = od.threshold
-                print("Threshold for ", name, cmdb_id, ' is ', thresh)
-                df_thresh = df_thresh.append({'key': key, 'name':name, 'host': cmdb_id, 'thresh': thresh}, ignore_index=True)
-        df_thresh.to_csv('thresh.csv',index=False)
-    print('Generation of', key, 'took', time.time() - start_key, 'seconds')
-print('Total generation took', time.time()-start_key, 'seconds')
+        df_thresh.to_csv('thresh_'+str(perc).replace('.','_')+'.data',index=False)
+
+for perc in [99.7,99.9,99.99,99.999]:
+    run_gen(perc)
