@@ -75,16 +75,17 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
         self.pid = [data['pid']]
         self.cmdb_id = [data['cmdb_id']]
 
+        if 'serviceName' in data:
+        #     # For data['callType']
+        #     #  in ['CSF', 'OSB', 'RemoteProcess', 'FlyRemote', 'LOCAL']
+            self.serviceName = [data['serviceName']]
+
         if data['callType'] in ['LOCAL','JDBC'] and 'dsName' in data:
             self.serviceName = [data['dsName']]
 
         elif data['callType'] == 'OSB' or data['callType'] == 'RemoteProcess' and 'cmdb_id' in data:
             self.serviceName = [data['cmdb_id']]
-
-        # if 'serviceName' in data:
-        #     # For data['callType']
-        #     #  in ['CSF', 'OSB', 'RemoteProcess', 'FlyRemote', 'LOCAL']
-        #     self.serviceName = [data['serviceName']]
+        
         # if 'dsName' in data and data['callType'] == 'JDBC':
         #     # For data['callType'] in ['JDBC', 'LOCAL']
         #     self.serviceName = [data['dsName']]
@@ -130,6 +131,7 @@ def handle_anomaly(df, timestamp):
 
     traces = df['trace']
     kpis = df['kpi']
+    print(traces)
     anomalous_hosts = trace_detector.detect(traces, kpis)
     
     print(anomalous_hosts)    
