@@ -29,8 +29,28 @@ def detect(traces,kpis):
 
     print(table)
 
+def process_kpis(kpis_df):
+    kpis_df['timestamp'] = kpis_df['timestamp'].apply(lambda x: datetime.datetime.fromtimestamp(x/ 1000.0))
+    kpis_df = kpis_df.set_index('timestamp')
+    return kpis_df
     
+def get_kpi_given_host(host, kpis):
+    # Get only the kpis of that host
+    kpis = kpis[kpis['cmdb_id'] == host]
+    kpis = process_kpis(kpis)
+    
+    groups = kpis.groupby(['name'])
+    table = pd.DataFrame(columns=[host], index=sorted(list(kpis['name'].unique())))
 
+    for group, groupdf in groups:
+        series = groupdf['value'].resample('60S').mean()
+        series = series.fillna(0)
+        # print(group, series)
+        val = esd.esd_test(series, 6) 
+        kip_name = group
+        table.at[group, host] = val[1]
+    
+    print(table)
 
 def process(traces_df):
         ids = traces_df[traces_df['callType'] == 'CSF']['id'].values
@@ -81,4 +101,5 @@ if __name__ == '__main__':
     path = sys.argv[1]
     kpis = pd.read_csv(path + '/kpi.csv')
     traces = pd.read_csv(path + '/trace.csv')
-    detect(traces,kpis)
+    # detect(traces,kpis)
+    get_kpi_given_host('docker_005', kpis)
