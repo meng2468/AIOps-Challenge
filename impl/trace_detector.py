@@ -19,16 +19,27 @@ def detect(traces,kpis):
     table = pd.DataFrame(columns=sorted(list(df['cmdb_id'].unique())), index=sorted(list(df['serviceName'].unique())))
     # print(table)
     for group, groupdf in groups:
-        print(group)
+        # print(group)
         series = groupdf['elapsedTime'].resample('60S').mean()
         val = esd.esd_test(series, 6) # frequency should be different?
-        print(val[1])
+        # print(val[1])
         
         host, service = group
         table.at[service,host] = val[1]
 
+    table = table.fillna(0)
     print(table)
 
+    threshold = table.values.max() / 10
+    print(threshold)
+    values = np.where(table.values > threshold)
+    
+    pairs = []
+    pairs.append(list(map(lambda x: table.index[x], values[0])))
+    pairs.append(list(map(lambda x: table.columns[x], values[1])))
+    
+    pairs = [x for x in zip(*pairs)]
+    print(pairs)
     
 
 
