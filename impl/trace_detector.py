@@ -16,6 +16,7 @@ def detect(traces,kpis):
     df = pd.concat(traces.values())
     # print(df)
     groups = df.groupby(['cmdb_id','serviceName'])
+    print(list(df['cmdb_id'].unique()), list(df['serviceName'].unique()))
     table = pd.DataFrame(columns=sorted(list(df['cmdb_id'].unique())), index=sorted(list(df['serviceName'].unique())))
     # print(table)
     for group, groupdf in groups:
@@ -144,47 +145,48 @@ def get_kpi_given_host(host, kpis):
 
 
 def process(traces_df):
-        ids = traces_df[traces_df['callType'] == 'CSF']['id'].values
+    traces_df = traces_df.copy(deep=True)
+    ids = traces_df[traces_df['callType'] == 'CSF']['id'].values
 
-        traces_df['startTime'] = traces_df['startTime'].apply(lambda x: datetime.datetime.fromtimestamp(x/ 1000.0))
-        traces_df = traces_df.set_index('startTime')
-        # print(traces_df)
-        # print(ids)
-        children_times = defaultdict(list)
+    traces_df['startTime'] = traces_df['startTime'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1000.0))
+    traces_df = traces_df.set_index('startTime')
+    # print(traces_df)
+    # print(ids)
+    children_times = defaultdict(list)
+    
+
+    relationship = {}
+    
+    def parse(row):
+        # parent -> child
+        if row['pid'] in ids:
+            relationship[row['pid']] = row['cmdb_id']
+
+        children_times[row['pid']].append(row['elapsedTime'])
+
+        # if row['callType'] in ['LOCAL','JDBC']:
+        #     row['serviceName'] = row['dsName']
         
+        # elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
+        #     row['serviceName'] = row['cmdb_id']
 
-        relationship = {}
+        return row
+
+    def apply(row):
+        # time of current becomes time of current minus children
         
-        def parse(row):
-            # parent -> child
-            if row['pid'] in ids:
-                relationship[row['pid']] = row['cmdb_id']
+        row['elapsedTime'] = row['elapsedTime'] - sum(children_times[row['id']])
 
-            children_times[row['pid']].append(row['elapsedTime'])
-
-            # if row['callType'] in ['LOCAL','JDBC']:
-            #     row['serviceName'] = row['dsName']
-            
-            # elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
-            #     row['serviceName'] = row['cmdb_id']
-
+        # parent -> new_parent
+        if row['callType'] != 'CSF':
+            return row
+        else:
+            if row['id'] in relationship:
+                row['serviceName'] = relationship[row['id']]
             return row
 
-        def apply(row):
-            # time of current becomes time of current minus children
-            
-            row['elapsedTime'] = row['elapsedTime'] - sum(children_times[row['id']])
-
-            # parent -> new_parent
-            if row['callType'] != 'CSF':
-                return row
-            else:
-                if row['id'] in relationship:
-                    row['serviceName'] = relationship[row['id']]
-                return row
-
-        traces_df = traces_df.apply(parse, axis=1) # transform dsName
-        return traces_df.apply(apply, axis=1)
+    traces_df = traces_df.apply(parse, axis=1) # transform dsName
+    return traces_df.apply(apply, axis=1)
 
 
 if __name__ == '__main__':
