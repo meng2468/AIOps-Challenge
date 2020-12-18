@@ -10,7 +10,7 @@ def detect(traces,kpis):
     for i, trace in enumerate(traces):
         # if i+1 % 500 == 0:
         #     print(i)
-        traces[trace] = process(traces[trace]).drop('dsName', axis=1)
+        traces[trace] = process(traces[trace])
         # print(traces[trace])
     
     df = pd.concat(traces.values())

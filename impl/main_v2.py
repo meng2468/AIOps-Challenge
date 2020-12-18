@@ -76,10 +76,10 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
         self.cmdb_id = [data['cmdb_id']]
 
         if data['callType'] in ['LOCAL','JDBC'] and 'dsName' in data:
-            self.serviceName = data['dsName']
+            self.serviceName = [data['dsName']]
 
         elif data['callType'] == 'OSB' or data['callType'] == 'RemoteProcess' and 'cmdb_id' in data:
-            self.serviceName = data['cmdb_id'] 
+            self.serviceName = [data['cmdb_id']]
 
         # if 'serviceName' in data:
         #     # For data['callType']
@@ -117,10 +117,6 @@ timestamp_lock = threading.Lock()
 def handle_anomaly(df, timestamp):
     global last_anomaly_timestamp
 
-    if np.max(df['trace']['startTime'].values)-np.min(df['trace']['startTime'].values) < 1000*60*10:
-        print('Wating on more data. Cannot check for anomaly')
-        return 
-
     with timestamp_lock:
         if last_anomaly_timestamp is None:
             last_anomaly_timestamp = timestamp
@@ -132,8 +128,8 @@ def handle_anomaly(df, timestamp):
             print(f'[INFO] New timestamp, assign {timestamp}')
             last_anomaly_timestamp = timestamp
 
-    traces = df['trace'][df['trace']['startTime'] <= timestamp]
-    kpis = df['kpi'][df['kpi']['timestamp'] <= timestamp]
+    traces = df['trace']
+    kpis = df['kpi']
     anomalous_hosts = trace_detector.detect(traces, kpis)
     
     print(anomalous_hosts)    
@@ -141,7 +137,7 @@ def handle_anomaly(df, timestamp):
 
 df = {
         'esb': pd.DataFrame(columns=['serviceName','startTime','avg_time','num','succee_num','succee_rate']), 
-        'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid','cmdb_id','serviceName','callType', 'dsName']), 
+        'trace': pd.DataFrame(columns=['startTime','elapsedTime','success','traceId','id','pid','cmdb_id','serviceName','callType']), 
         'kpi': pd.DataFrame(columns=['item_id','name','bomc_id','timestamp','value','cmdb_id'])
     }
 
@@ -169,7 +165,7 @@ def analyzer(esb_array, trace_array, kpi_array):
         df['kpi'] = pd.concat([df['kpi'], kpi], ignore_index=True)
     
 
-    window_size_ms = 1000 * 60 * 5 # window size: 5min
+    window_size_ms = 1000 * 60 * 15 # window size: 5min
     timestamp = int(df['esb'].iloc[-1]['startTime'])
 
     print(f'Time is {timestamp}')
@@ -178,7 +174,7 @@ def analyzer(esb_array, trace_array, kpi_array):
         print(f'[DEBUG] Size of dataframe {key} was {len(df[key])}')
         dataframe = df[key]
         if (key == 'kpi'):
-            df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*12]
+            df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*4]
         else:
             df[key] = dataframe[dataframe['startTime'] >= timestamp - window_size_ms]
         print(f'[DEBUG] Size of dataframe {key} is now {len(df[key])}')
@@ -188,6 +184,7 @@ def analyzer(esb_array, trace_array, kpi_array):
     esb_is_anomalous = esb_heur.find_anom(df['esb'])
 
     if(esb_is_anomalous):
+        time.sleep(61*3)
         print('ESB anomaly detected')
         print_sep()
         print('Running trace_detector...')
