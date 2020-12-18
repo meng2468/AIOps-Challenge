@@ -1,11 +1,11 @@
 import pandas as pd
 import datetime
 from collections import defaultdict
-
+import numpy as np
 import ts_anomaly_detection as esd
 
 def detect(traces,kpis):
-    traces = dict(tuple(traces.groupby('traceId'))[:50])
+    traces = dict(tuple(traces.groupby('traceId')))
     print(f'Number of traces {len(traces)}')
     for i, trace in enumerate(traces):
         if i+1 % 500 == 0:
@@ -14,21 +14,26 @@ def detect(traces,kpis):
         # print(traces[trace])
     
     df = pd.concat(traces.values())
-
+    print(df)
     groups = df.groupby(['cmdb_id','serviceName'])
+    table = pd.DataFrame(columns=sorted(list(df['cmdb_id'].unique())), index=sorted(list(df['serviceName'].unique())))
+    # print(table)
     for group, groupdf in groups:
-        # print(groupdf.index.dtype)
-        series = groupdf['elapsedTime'].resample('10S').mean().fillna(0)
+        print(group)
+        series = groupdf['elapsedTime'].resample('60S').mean()
         val = esd.esd_test(series, 6) # frequency should be different?
-        print(val, type(val[1]))
+        print(val[1])
+        
+        host, service = group
+        table.at[service,host] = val[1]
 
-    
+    print(table)
 
     
 
 
 def process(traces_df):
-        ids = traces_df[traces_df['callType'] == 'CSF']['id']
+        ids = traces_df[traces_df['callType'] == 'CSF']['id'].values
 
         traces_df['startTime'] = traces_df['startTime'].apply(lambda x: datetime.datetime.fromtimestamp(x/ 1000.0))
         traces_df = traces_df.set_index('startTime')
@@ -49,7 +54,7 @@ def process(traces_df):
             if row['callType'] in ['LOCAL','JDBC']:
                 row['serviceName'] = row['dsName']
             
-            elif row['callType'] == 'OSB':
+            elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
                 row['serviceName'] = row['cmdb_id']
 
             return row
@@ -64,7 +69,7 @@ def process(traces_df):
                 return row
             else:
                 if row['id'] in relationship:
-                    row['cmdb_id'] = relationship[row['id']]
+                    row['serviceName'] = relationship[row['id']]
                 return row
 
         traces_df = traces_df.apply(parse, axis=1) # transform dsName
@@ -72,6 +77,8 @@ def process(traces_df):
 
 
 if __name__ == '__main__':
-    kpis = pd.read_csv('test.csv')
-    traces = pd.read_csv('trace_test.csv')
+    import sys
+    path = sys.argv[1]
+    kpis = pd.read_csv(path + '/kpi.csv')
+    traces = pd.read_csv(path + '/trace.csv')
     detect(traces,kpis)

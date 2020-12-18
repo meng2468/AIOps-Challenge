@@ -89,17 +89,17 @@ def esd_test(x, freq, alpha=0.95, ub=0.499, hybrid=True):
   # Carry out the esd test k times  
   res = np.ma.array(x, mask=False) # The "ma" structure allows masking of values to exclude the elements from any calculation
   anomalies = [] # returns the indices of the found anomalies
-  avg_val = 0
+  vals = []
   for i in range(1, k+1):
     location, dispersion = esd_test_statistics(res, hybrid) # Sample statistics
     tmp = np.abs(res - location) / dispersion
     idx = np.argmax(tmp) # Index of the test statistic
     test_statistic = tmp[idx] 
-    avg_val += test_statistic
     n = nobs - res.mask.sum() # sums non masked values
     critical_value = (n - i) * t.ppf(alpha, n - i - 1) / np.sqrt((n - i - 1 + np.power(t.ppf(alpha, n - i - 1), 2)) * (n - i - 1)) 
     if test_statistic > critical_value:
       anomalies.append(idx)
+      vals.append(test_statistic)
     res.mask[idx] = True  
     
-  return anomalies, avg_val / k
+  return anomalies, np.mean(vals)
