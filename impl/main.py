@@ -14,7 +14,7 @@ import threading
 # from models.esb_detection.vae import detect as esb_vae
 from models.esb_detection.seas_decomp import detect as esb_seas
 from models.esb_detection.heuristic import detect as esb_heur
-from models.trace_localisation.microrca.micro_rca import MicroRCA
+import trace_detector
 # from models.kpi_detection.vae import detect as kpi_detection
 from server_config import SERVER_CONFIGURATION
 
@@ -107,7 +107,7 @@ def submit(ctx, timestamp):
 
 last_anomaly_timestamp = None
 timestamp_lock = threading.Lock()
-def handle_anomaly(df, microRCA, timestamp):
+def handle_anomaly(df, timestamp):
     global last_anomaly_timestamp
 
     with timestamp_lock:
@@ -132,7 +132,7 @@ def handle_anomaly(df, microRCA, timestamp):
     else:
         traces = df['trace'][df['trace']['startTime'] <= timestamp]
         kpis = df['kpi'][df['kpi']['timestamp'] <= timestamp]
-        anomalous_hosts = microRCA.detect(traces, kpis)
+        anomalous_hosts = trace_detector.detect(traces, kpis)
     
     print(anomalous_hosts)
 
@@ -238,5 +238,4 @@ def main():
 
 if __name__ == '__main__':
     # Initialize the MicroRCA detector
-    microRCA = MicroRCA()
     main()

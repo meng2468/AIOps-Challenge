@@ -1,0 +1,10 @@
+业务指标，采集频率2分钟
+业务指标服务名与调用链中各接口名称对应。
+
+字段描述：
+`serviceName` varchar(500) COMMENT '服务名称',
+  `startTime` TIMESTAMP COMMENT '开始时间',
+  `avg_time` double COMMENT '平均调用时长',
+  `num` int COMMENT '总调用次数',
+  `succee_num` int COMMENT '成功调用次数',
+  `succee_rate` varchar(50) COMMENT '成功调用率',
