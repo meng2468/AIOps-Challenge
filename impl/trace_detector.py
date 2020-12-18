@@ -162,11 +162,11 @@ def process(traces_df):
 
             children_times[row['pid']].append(row['elapsedTime'])
 
-            if row['callType'] in ['LOCAL','JDBC']:
-                row['serviceName'] = row['dsName']
+            # if row['callType'] in ['LOCAL','JDBC']:
+            #     row['serviceName'] = row['dsName']
             
-            elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
-                row['serviceName'] = row['cmdb_id']
+            # elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
+            #     row['serviceName'] = row['cmdb_id']
 
             return row
 
@@ -192,4 +192,9 @@ if __name__ == '__main__':
     path = sys.argv[1]
     kpis = pd.read_csv(path + '/kpi.csv')
     traces = pd.read_csv(path + '/trace.csv')
+
+    print(traces.head())
+    # print(kpis.head())
+    print(traces['dsName'].describe())
+    exit()
     print(detect(traces,kpis))
