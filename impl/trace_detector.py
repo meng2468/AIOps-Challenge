@@ -86,7 +86,7 @@ def analyze(pairs, kpis):
     
     dbs = [x[0] for x in dbs]
 
-    vm = ["os_001"] if cmdbs and list(filter(lambda x: 'os' in x, cmdbs)) else list()
+    vm = set(["os_001"]) if cmdbs and list(filter(lambda x: 'os' in x, cmdbs)) else set()
 
     # specific case
     # if csf needs to find one of the hosts 17-20
@@ -95,21 +95,19 @@ def analyze(pairs, kpis):
         cmdbs = cmdbs.union(csf_hosts)
 
     kpis = process_kpis(kpis)
-    if vm:
-        return [[vm[0], kpi] for kpi in get_kpi_given_host(vm, kpis[kpis['cmdb_id'] == vm[0]])]
-    else:
-        #one big list...
-        result = []
-        hosts = cmdbs.union(dbs)
-        kpis = dict(tuple(kpis.groupby('cmdb_id')))
-        print('Checking ', hosts)
-        for host in hosts:
-            if host in kpis:
-                kpidf = kpis[host]
-                res = get_kpi_given_host(host, kpidf)
-                result.extend([[host, kpi] for kpi in res])
-            
-        return [[host, None] for host in networks] + result
+    
+    #one big list...
+    result = []
+    hosts = cmdbs.union(dbs).union(vm)
+    kpis = dict(tuple(kpis.groupby('cmdb_id')))
+    print('Checking ', hosts)
+    for host in hosts:
+        if host in kpis:
+            kpidf = kpis[host]
+            res = get_kpi_given_host(host, kpidf)
+            result.extend([[host, kpi] for kpi in res])
+        
+    return [[host, None] for host in networks] + result
 
 
 def process_kpis(kpis_df):
@@ -119,6 +117,7 @@ def process_kpis(kpis_df):
     
 def get_kpi_given_host(host, kpis):
     groups = kpis.groupby(['name'])
+    # print(kpis)
     table = pd.DataFrame(columns=[host], index=sorted(list(kpis['name'].unique())))
 
     for group, groupdf in groups:
@@ -132,8 +131,11 @@ def get_kpi_given_host(host, kpis):
     table = table.fillna(0)
     threshold = table.values.max() / 2 # 50%
     values = np.where(table.values > threshold)
-
-    return set(list(map(lambda x: table.index[x].values[0], values)))
+    # print(values)
+    try:
+        return set(list(map(lambda x: table.index[x].values[0], values)))
+    except:
+        return set()
 
 
 
@@ -186,7 +188,7 @@ def process(traces):
         if row['callType'] != 'CSF':
             return row
         else:
-            if row['id'] in relationship:
+            if row['id'] in relationship and relationship[row['id']][1] != '':
                 row['serviceName'] = relationship[row['id']][1]
             return row
 
