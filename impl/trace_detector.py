@@ -110,7 +110,8 @@ def analyze(pairs, kpis):
     return [[host, None] for host in networks] + result
 
 
-def process_kpis(kpis_df):
+def process_kpis(kpis):
+    kpis_df = kpis.copy(deep=True)
     kpis_df['timestamp'] = kpis_df['timestamp'].apply(lambda x: datetime.datetime.fromtimestamp(x/ 1000.0))
     kpis_df = kpis_df.set_index('timestamp')
     return kpis_df
@@ -141,7 +142,6 @@ def get_kpi_given_host(host, kpis):
 
 def process(traces):
     traces_df = traces.copy(deep=True)
-    
     ids = traces_df[traces_df['callType'] == 'CSF']['id'].values
 
     traces_df['startTime'] = traces_df['startTime'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1000.0))

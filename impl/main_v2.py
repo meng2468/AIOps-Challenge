@@ -200,7 +200,7 @@ def analyzer(esb_array, trace_array, kpi_array):
         t.start()
 
 
-    if(esb_is_anomalous) or True:
+    if(esb_is_anomalous):
         print('ESB anomaly detected')
         global last_anomaly_timestamp
         with timestamp_lock:
