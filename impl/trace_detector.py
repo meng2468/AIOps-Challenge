@@ -176,12 +176,13 @@ def process(traces):
         if row['id'] in relationship:
             row['elapsedTime'] = row['elapsedTime'] - relationship[row['id']][0]
         
-        if row['callType'] == 'LOCAL' or row['callType'] == 'JDBC':
-            row['serviceName'] = row['dsName']
-        elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
-            row['serviceName'] = row['cmdb_id']
+        # Following 4 lines only for running local tests
+        # if row['callType'] == 'LOCAL' or row['callType'] == 'JDBC':
+        #     row['serviceName'] = row['dsName']
+        # elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
+        #     row['serviceName'] = row['cmdb_id']
         
-        # parent -> new_parent
+        # # parent -> new_parent
         if row['callType'] != 'CSF':
             return row
         else:

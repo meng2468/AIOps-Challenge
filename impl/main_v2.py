@@ -183,8 +183,11 @@ def analyzer(esb_array, trace_array, kpi_array):
     if trace_countdown is None:
         trace_countdown = -1
     else:
-        print(trace_countdown-1, 'minutes left until trace_detector is called')
-        trace_countdown -= 1
+        if trace_countdown > 0:
+            print(trace_countdown-1, 'minutes left until trace_detector is called')
+            trace_countdown -= 1
+        else:
+            trace_countdown = -1
 
 
     if trace_countdown == 0:
@@ -197,13 +200,13 @@ def analyzer(esb_array, trace_array, kpi_array):
         t.start()
 
 
-    if(esb_is_anomalous):
+    if(esb_is_anomalous) or True:
         print('ESB anomaly detected')
         global last_anomaly_timestamp
         with timestamp_lock:
             if last_anomaly_timestamp is None:
                 last_anomaly_timestamp = timestamp
-                print(f'[INFO] First anomaly, assign {timestamp} to discovery time')
+                print(f'[INFO] First anomaly, assign {timestamp} to discovery time') 
             elif timestamp - last_anomaly_timestamp < 1000*60*10: 
                 print(f'[INFO] Last anomaly was detected less than 10 min ago, skipping...')
                 return 
