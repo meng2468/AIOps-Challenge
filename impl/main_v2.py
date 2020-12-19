@@ -1,6 +1,10 @@
 '''
 Example for data consuming.
 '''
+
+# Version 19.12. 14:15 Replaced time.sleep 
+## Author: Malte
+
 import json
 import os
 
@@ -156,12 +160,13 @@ def analyzer(esb_array, trace_array, kpi_array):
         df['kpi'] = pd.concat([df['kpi'], kpi], ignore_index=True)
     
 
-    window_size_ms = 1000 * 60 * 10 # window size: 5min
+    window_size_ms = 1000 * 60 * 10 # window size: 10 minutes
     timestamp = int(df['esb'].iloc[-1]['startTime'])
 
     # remove from all dfs
     for key in df:
         dataframe = df[key]
+        print_sep()
         print(f'[DEBUG] Size of dataframe {key} was {len(df[key])}')
         if (key == 'kpi'):
             df[key] = dataframe[dataframe['timestamp'] >= timestamp - window_size_ms*6]
@@ -169,9 +174,26 @@ def analyzer(esb_array, trace_array, kpi_array):
             df[key] = dataframe[dataframe['startTime'] >= timestamp - window_size_ms]
         print(f'[DEBUG] Size of dataframe {key} is now {len(df[key])}')
 
-          
+        
 
     esb_is_anomalous = esb_heur.find_anom(df['esb'])
+    
+    try:
+        if trace_countdown > 0:
+            print(trace_countdown, 'minutes left until trace_detector is called')
+        trace_countdown -= -1
+    except:
+        trace_countdown = -1
+
+    if trace_countdown == 0:
+        print('Countdown done, starting trace_detector thread')
+        print("Kpi data has")
+        print(len(df['kpi']), "rows", 'and', np.round((np.max(df['kpi']['timestamp'])-np.min(df['kpi']['timestamp']))/60000), "minute window size")
+        print("Trace data has")
+        print(len(df['trace']), "rows", 'and', np.round((np.max(df['trace']['startTime'])-np.min(df['trace']['startTime']))/60000), "minute window size")
+        t = threading.Thread(target=handle_anomaly, args=(df,timestamp))
+        t.start()
+
 
     if(esb_is_anomalous):
         print('ESB anomaly detected')
@@ -179,18 +201,21 @@ def analyzer(esb_array, trace_array, kpi_array):
         with timestamp_lock:
             if last_anomaly_timestamp is None:
                 last_anomaly_timestamp = timestamp
-                print(f'[INFO] Timestamp was None, assign {timestamp}')
-            elif timestamp - last_anomaly_timestamp < 1000*60*10: # Last anomaly was detected less than 5 min ago
-                print(f'[INFO] Last anomaly was detected less than 5 min ago, skipping... {timestamp}')
+                print(f'[INFO] First anomaly, assign {timestamp} to discovery time')
+            elif timestamp - last_anomaly_timestamp < 1000*60*7: 
+                print(f'[INFO] Last anomaly was detected less than 7 min ago, skipping... {timestamp}')
                 return 
-            else: # Last anomaly was detected more than 5 min ago
-                print(f'[INFO] New timestamp, assign {timestamp}')
+            else: # Last anomaly was detected more than 7 min ago
+                print(f'[INFO] Discovered new anomaly, assign {timestamp} to discovery time')
                 last_anomaly_timestamp = timestamp
-        print('Started 3min timer...')
-        time.sleep(61*3)
-        print('Starting trace_detector thread')
-        t = threading.Thread(target=handle_anomaly, args=(df,timestamp))
-        t.start()
+        print("Starting 3 minute countdown!")
+        trace_countdown = 3
+        # print('Started 3min timer...')
+        # time.sleep(61*3)
+        
+        # print('Starting trace_detector thread')
+        # t = threading.Thread(target=handle_anomaly, args=(df,timestamp))
+        # t.start()
         # TODO do we need to wait for it?
     else:
         print('No ESB anomaly')

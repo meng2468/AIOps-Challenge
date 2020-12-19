@@ -156,6 +156,12 @@ def process(traces):
         else:
             child_host = ''
 
+        # Following 4 lines only for running local tests
+        # if row['callType'] in ['LOCAL','JDBC']:
+        #          row['serviceName'] = row['dsName']
+        # elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
+        #          row['serviceName'] = row['cmdb_id']
+        
         if row['pid'] not in relationship:
             relationship[row['pid']] = [row['elapsedTime'], child_host]
         else:
@@ -190,11 +196,16 @@ def process(traces):
 if __name__ == '__main__':
     import sys
     path = sys.argv[1]
-    kpis = pd.read_csv(path + '/kpi.csv')
-    traces = pd.read_csv(path + '/trace.csv')
+    import os
+    anoms = []
+    for file in os.listdir(path):
+        print(file)
+        kpis = pd.read_csv(path + '/' + file + '/kpi.csv')
+        traces = pd.read_csv(path + '/' + file +'/trace.csv')
+        # print("Kpi data has")
+        # print(len(kpis), "rows", 'and', np.round((np.max(kpis['timestamp'])-np.min(kpis['timestamp']))/60000), "minute window size")
+        # print("Trace data has")
+        # print(len(traces), "rows", 'and', np.round((np.max(traces['startTime'])-np.min(traces['startTime']))/60000), "minute window size")
 
-    print(traces.head())
-    # print(kpis.head())
-    # print(traces['dsName'].describe())
-    # exit()
-    print(detect(traces,kpis))
+        anoms.append(detect(traces,kpis))
+    print('Detected anomalies:', anoms)
