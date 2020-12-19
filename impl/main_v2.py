@@ -121,6 +121,7 @@ def submit(ctx, timestamp):
     r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
 last_anomaly_timestamp = None
+trace_countdown = None
 timestamp_lock = threading.Lock()
 def handle_anomaly(df, timestamp):
     traces = df['trace']
@@ -178,12 +179,13 @@ def analyzer(esb_array, trace_array, kpi_array):
 
     esb_is_anomalous = esb_heur.find_anom(df['esb'])
     
-    try:
-        if trace_countdown > 0:
-            print(trace_countdown, 'minutes left until trace_detector is called')
-        trace_countdown -= -1
-    except:
+    global trace_countdown
+    if trace_countdown is None:
         trace_countdown = -1
+    else:
+        print(trace_countdown-1, 'minutes left until trace_detector is called')
+        trace_countdown -= 1
+
 
     if trace_countdown == 0:
         print('Countdown done, starting trace_detector thread')
@@ -202,8 +204,8 @@ def analyzer(esb_array, trace_array, kpi_array):
             if last_anomaly_timestamp is None:
                 last_anomaly_timestamp = timestamp
                 print(f'[INFO] First anomaly, assign {timestamp} to discovery time')
-            elif timestamp - last_anomaly_timestamp < 1000*60*7: 
-                print(f'[INFO] Last anomaly was detected less than 7 min ago, skipping... {timestamp}')
+            elif timestamp - last_anomaly_timestamp < 1000*60*10: 
+                print(f'[INFO] Last anomaly was detected less than 10 min ago, skipping...')
                 return 
             else: # Last anomaly was detected more than 7 min ago
                 print(f'[INFO] Discovered new anomaly, assign {timestamp} to discovery time')
