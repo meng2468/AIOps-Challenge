@@ -5,16 +5,8 @@ import numpy as np
 import ts_anomaly_detection as esd
 
 def detect(traces,kpis):
-    traces = dict(tuple(traces.groupby('traceId')))
-    print(f'Number of traces {len(traces)}')
-    for i, trace in enumerate(traces):
-        # if i+1 % 500 == 0:
-        #     print(i)
-        traces[trace] = process(traces[trace])
-        # print(traces[trace])
+    df = process(traces)
     
-    df = pd.concat(traces.values())
-    # print(df)
     groups = df.groupby(['cmdb_id','serviceName'])
     print(list(df['cmdb_id'].unique()), list(df['serviceName'].unique()))
     table = pd.DataFrame(columns=sorted(list(df['cmdb_id'].unique())), index=sorted(list(df['serviceName'].unique())))
@@ -94,7 +86,7 @@ def analyze(pairs, kpis):
     
     dbs = [x[0] for x in dbs]
 
-    vm = ["os_001"] if list(filter(lambda x: 'os' in x, cmdbs)) else list()
+    vm = ["os_001"] if cmdbs and list(filter(lambda x: 'os' in x, cmdbs)) else list()
 
     # specific case
     # if csf needs to find one of the hosts 17-20
@@ -102,14 +94,14 @@ def analyze(pairs, kpis):
     if any(map(lambda x: 'csf' in x[0], normal_servs)):
         cmdbs = cmdbs.union(csf_hosts)
 
-
+    kpis = process_kpis(kpis)
     if vm:
-        return vm
+        return [[vm[0], kpi] for kpi in get_kpi_given_host(vm, kpis[kpis['cmdb_id'] == vm[0]])]
     else:
         #one big list...
         result = []
         hosts = cmdbs.union(dbs)
-        kpis = dict(tuple(process_kpis(kpis).groupby('cmdb_id')))
+        kpis = dict(tuple(kpis.groupby('cmdb_id')))
         print('Checking ', hosts)
         for host in hosts:
             if host in kpis:
@@ -144,45 +136,51 @@ def get_kpi_given_host(host, kpis):
     return set(list(map(lambda x: table.index[x].values[0], values)))
 
 
-def process(traces_df):
-    traces_df = traces_df.copy(deep=True)
+
+def process(traces):
+    traces_df = traces.copy(deep=True)
+    
     ids = traces_df[traces_df['callType'] == 'CSF']['id'].values
 
     traces_df['startTime'] = traces_df['startTime'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1000.0))
     traces_df = traces_df.set_index('startTime')
     # print(traces_df)
     # print(ids)
-    children_times = defaultdict(list)
-    
-
     relationship = {}
     
     def parse(row):
         # parent -> child
-        if row['pid'] in ids:
-            relationship[row['pid']] = row['cmdb_id']
+        if row['callType'] == 'CSF' and row['pid'] in ids:
+            # relationship[row['pid']] = row['cmdb_id']
+            child_host = row['cmdb_id']
+        else:
+            child_host = ''
 
-        children_times[row['pid']].append(row['elapsedTime'])
-
-        # if row['callType'] in ['LOCAL','JDBC']:
-        #     row['serviceName'] = row['dsName']
-        
-        # elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
-        #     row['serviceName'] = row['cmdb_id']
+        if row['pid'] not in relationship:
+            relationship[row['pid']] = [row['elapsedTime'], child_host]
+        else:
+            relationship[row['pid']][0] += row['elapsedTime']
+        # relationship[row['pid']].append(row['elapsedTime'])
 
         return row
 
     def apply(row):
         # time of current becomes time of current minus children
         
-        row['elapsedTime'] = row['elapsedTime'] - sum(children_times[row['id']])
-
+        if row['id'] in relationship:
+            row['elapsedTime'] = row['elapsedTime'] - relationship[row['id']][0]
+        
+        if row['callType'] == 'LOCAL' or row['callType'] == 'JDBC':
+            row['serviceName'] = row['dsName']
+        elif row['callType'] == 'OSB' or row['callType'] == 'RemoteProcess':
+            row['serviceName'] = row['cmdb_id']
+        
         # parent -> new_parent
         if row['callType'] != 'CSF':
             return row
         else:
             if row['id'] in relationship:
-                row['serviceName'] = relationship[row['id']]
+                row['serviceName'] = relationship[row['id']][1]
             return row
 
     traces_df = traces_df.apply(parse, axis=1) # transform dsName
@@ -197,6 +195,6 @@ if __name__ == '__main__':
 
     print(traces.head())
     # print(kpis.head())
-    print(traces['dsName'].describe())
-    exit()
+    # print(traces['dsName'].describe())
+    # exit()
     print(detect(traces,kpis))

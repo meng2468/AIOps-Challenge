@@ -97,6 +97,9 @@ ANOMALY_FILENAME = 'anomalies_list.csv'
 def submit(ctx, timestamp):
     global ANOMALY_FILENAME
 
+    if not ctx:
+        return
+
     with open(ANOMALY_FILENAME, 'a') as f:
         print(f'[INFO][{timestamp}] Writing new result to file: {ctx}')
         writer = csv.writer(f)
