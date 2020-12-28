@@ -126,7 +126,7 @@ def main():
 
             clean_tables()
         else:  # message.topic == 'trace'
-            data_tables['trace'].append(Trace(data['body']))
+            data_tables['trace'].append(Trace(data))
             
 
 

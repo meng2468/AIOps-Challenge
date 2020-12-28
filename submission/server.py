@@ -71,10 +71,8 @@ if __name__ == '__main__':
             producer.send('platform-index', json.dumps(data).encode('utf-8'))
             kpi_index += 1
         else:
-            data = {
-                'body' : json.loads(trace.iloc[trace_index].to_json()),
-                'startTime' : time.time()
-            }
+            data = json.loads(trace.iloc[trace_index].to_json())
+            
             producer.send('trace', json.dumps(data).encode('utf-8'))
             trace_index += 1
             if trace_index % TRACE_BATCH_SIZE == 0:
