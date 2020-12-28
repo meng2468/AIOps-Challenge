@@ -97,13 +97,34 @@ def main():
         'trace' : deque(),
     }
 
+    esb_time_window = 5 * 60 * 1000
+    trace_time_window = 5 * 60 * 1000
+    kpi_time_window = 60 * 60 * 1000
+
+    def clean_tables():
+        
+        print(f"[DEBUG] Before cleanup sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
+
+        while data_tables['esb'][0].start_time < data_tables['esb'][-1].start_time - esb_time_window:
+            data_tables['esb'].popleft() 
+
+        while data_tables['kpi'][0].timestamp < data_tables['kpi'][-1].timestamp - kpi_time_window:
+            data_tables['kpi'].popleft()
+
+        while data_tables['trace'][0].start_time < data_tables['trace'][-1].start_time - trace_time_window:
+            data_tables['trace'].popleft()
+
+        print(f"[DEBUG] After cleanup, sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
+
     for message in CONSUMER:
         data = json.loads(message.value.decode('utf8'))
 
         if message.topic == 'platform-index':
-            data_tables['kpi'].extend([PlatformIndex(item) for item in data['body'][stack]] for stack in data['body'])
+            data_tables['kpi'].extend(PlatformIndex(item) for stack in data['body'] for item in data['body'][stack])
         elif message.topic == 'business-index':
-            data_tables['esb'].extend([BusinessIndex(item) for item in data['body'][key]] for key in data['body'])
+            data_tables['esb'].extend(BusinessIndex(item) for key in data['body'] for item in data['body'][key])
+
+            clean_tables()
         else:  # message.topic == 'trace'
             data_tables['trace'].append(Trace(data['body']))
             
