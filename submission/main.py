@@ -3,6 +3,7 @@ Example for data consuming.
 '''
 import requests
 import json
+from collections import deque
 
 from kafka import KafkaConsumer
 
@@ -91,19 +92,20 @@ def main():
     assert AVAILABLE_TOPICS <= CONSUMER.topics(), 'Please contact admin'
 
     data_tables = {
-        'esb'   : [],
-        'kpi'   : [],
-        'trace' : [],
+        'esb'   : deque(),
+        'kpi'   : deque(),
+        'trace' : deque(),
     }
 
     for message in CONSUMER:
         data = json.loads(message.value.decode('utf8'))
+
         if message.topic == 'platform-index':
             data_tables['kpi'].extend([PlatformIndex(item) for item in data['body'][stack]] for stack in data['body'])
         elif message.topic == 'business-index':
             data_tables['esb'].extend([BusinessIndex(item) for item in data['body'][key]] for key in data['body'])
         else:  # message.topic == 'trace'
-            data_tables['trace'].append(Trace(data))
+            data_tables['trace'].append(Trace(data['body']))
             
 
 

@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
         if esb_time == v:
             data = {
-                'body' : [esb.iloc[esb_index].to_json()],
+                'body' : {'esb': [json.loads(esb.iloc[esb_index].to_json())]},
                 'startTime' : time.time()
             }
             producer.send('business-index', json.dumps(data).encode('utf-8'))
@@ -64,7 +64,7 @@ if __name__ == '__main__':
         elif kpi_time == v:
             data = {
                 'body' : {
-                    'key': [kpi.iloc[kpi_index].to_json()] # key doesnt matter
+                    'key': [json.loads(kpi.iloc[kpi_index].to_json())] # key doesnt matter
                 },
                 'timestamp' : time.time() 
             }
@@ -72,7 +72,7 @@ if __name__ == '__main__':
             kpi_index += 1
         else:
             data = {
-                'body' : trace.iloc[trace_index].to_json(),
+                'body' : json.loads(trace.iloc[trace_index].to_json()),
                 'startTime' : time.time()
             }
             producer.send('trace', json.dumps(data).encode('utf-8'))
