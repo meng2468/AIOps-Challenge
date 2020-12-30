@@ -9,8 +9,6 @@ import time
 import csv
 import os
 
-
-
 def unzip_all():
     for file in os.listdir('.'):
         if file[-3:] == 'zip':
@@ -28,6 +26,7 @@ def get_formatted_anoms(anomalies):
     for i in range(len(anomalies)):
         anomaly = {}
         anomaly['folder'] = str(i) + '_' + anomalies['fault_desrcibtion'].values[i].replace(' ', '_')
+        anomaly['fault'] = anomalies['fault_desrcibtion'].values[i]
         anomaly['host'] = anomalies['name'].values[i]
         anomaly['container'] = anomalies['container'].values[i]
         anomaly['kpi'] = anomalies['kpi'].values[i]
@@ -88,7 +87,7 @@ def generate_folder(anomaly):
     kpi.to_csv(anomaly['folder'] + '/host.csv', index=False)
 
 if __name__ == '__main__':
-    # unzip_all()
+    unzip_all()
     anomalies = pd.read_csv('anomalies.data')
     anomalies = get_formatted_anoms(anomalies)
     for i in range(len(anomalies)):
