@@ -4,7 +4,7 @@ import sys
 import random
 
 from utils.data_types import *
-from utils.trace_build import *
+from utils.trace import *
 
 if __name__ == '__main__':
     print(f'Testing {__file__}')

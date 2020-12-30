@@ -12,7 +12,7 @@ from kafka import KafkaConsumer
 from server_config import SERVER_CONFIGURATION
 from lib.utils.data_types import PlatformIndex, BusinessIndex, Trace
 
-from lib.utils import trace_build
+from lib.utils import trace
 
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
@@ -69,7 +69,7 @@ def process(new_data):
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
     
-    
+
 
 def main():
     '''Consume data and react'''
