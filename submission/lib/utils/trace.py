@@ -27,11 +27,16 @@ def parse(traces):
     # Remove time of the children from the parent
     for trace in trace_dict.values():
         times = defaultdict(int)
-        
+        csf_items = {} # {<id>: <object reference>}
+
         for i in range(len(trace) - 1, 0, -1):
             times[trace[i].pid] += trace[i].elapsed_time
+            if trace[i].call_type == 'CSF':
+                csf_items[trace[i].id] = trace[i]
         
         for el in trace:
             el.elapsed_time -= times[el.id]
+            if el.pid in csf_items:
+                csf_items[el.pid].service_name = el.cmdb_id
 
     return trace_dict

@@ -50,6 +50,7 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
         if 'dsName' in data:
             # For data['callType'] in ['JDBC', 'LOCAL']
             self.ds_name = data['dsName']
+            self.service_name = self.ds_name
 
     def __repr__(self):
         return f'{self.call_type}\t{self.start_time}\t{self.elapsed_time}\t{self.success}\t{self.trace_id}\t{self.id}\t{self.pid}\t{self.cmdb_id}\t{self.service_name}\t{self.ds_name}'
