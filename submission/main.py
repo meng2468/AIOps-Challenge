@@ -6,6 +6,7 @@ import json
 import time
 from collections import deque
 import threading
+import pickle
 
 from kafka import KafkaConsumer
 
@@ -43,6 +44,11 @@ data = {
 
 data_lock = threading.Lock()
 
+QUANTILES_PATH = './lib/models/quantiles.pickle'
+
+with open(QUANTILES_PATH, 'rb') as f:
+        QUANTILES = pickle.load(f)
+
 def process(new_data):
     ESB_TIME_WINDOW =   5 * 60 * 1000
     TRACE_TIME_WINDOW = 5 * 60 * 1000
@@ -68,8 +74,9 @@ def process(new_data):
         data['kpi'].extend(new_data['kpi'])
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
-    
+        analysis = trace.get_anomalous_hosts_count(QUANTILES, data['trace'])
 
+    print(analysis)
 
 def main():
     '''Consume data and react'''

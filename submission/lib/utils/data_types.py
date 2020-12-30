@@ -42,15 +42,16 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
         self.id = data['id']
         self.pid = data['pid']
         self.cmdb_id = data['cmdb_id']
-
         if 'serviceName' in data:
             # For data['callType']
             #  in ['CSF', 'OSB', 'RemoteProcess', 'FlyRemote', 'LOCAL']
             self.service_name = data['serviceName']
-        if 'dsName' in data:
+
+        # Tiago: I added the type checking here due to training data inconsistency, don't remove
+        if 'dsName' in data and not isinstance(data['dsName'], float) and data['dsName']: 
             # For data['callType'] in ['JDBC', 'LOCAL']
             self.ds_name = data['dsName']
             self.service_name = self.ds_name
 
     def __repr__(self):
-        return f'{self.call_type}\t{self.start_time}\t{self.elapsed_time}\t{self.success}\t{self.trace_id}\t{self.id}\t{self.pid}\t{self.cmdb_id}\t{self.service_name}\t{self.ds_name}'
+        return f'{self.call_type}\t{self.start_time}\t{self.elapsed_time}\t{self.success}\t{self.trace_id}\t{self.id}\t{self.pid}\t{self.cmdb_id}\t{self.service_name}'

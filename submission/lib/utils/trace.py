@@ -40,3 +40,21 @@ def parse(traces):
                 csf_items[el.pid].service_name = el.cmdb_id
 
     return trace_dict
+
+def get_anomalous_hosts_count(limits, traces):
+    traces = parse(traces)
+    results = defaultdict(int)
+
+    for trace_id, trace in traces.items():
+        for trace_span in trace:
+            # Check if threshold is surpassed by the elements
+            key = (trace_span.service_name)
+            if not limits[key]:
+                print(key,'not found')
+                continue
+            
+            lower, upper = limits[key]
+            if not lower <= trace_span.elapsed_time <= upper:
+                results[key] += 1
+
+    return results
