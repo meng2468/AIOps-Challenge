@@ -27,11 +27,34 @@ def parse(traces):
     # Remove time of the children from the parent
     for trace in trace_dict.values():
         times = defaultdict(int)
-        
+        csf_items = {} # {<id>: <object reference>}
+
         for i in range(len(trace) - 1, 0, -1):
             times[trace[i].pid] += trace[i].elapsed_time
+            if trace[i].call_type == 'CSF':
+                csf_items[trace[i].id] = trace[i]
         
         for el in trace:
             el.elapsed_time -= times[el.id]
+            if el.pid in csf_items:
+                csf_items[el.pid].service_name = el.cmdb_id
 
     return trace_dict
+
+def get_anomalous_hosts_count(limits, traces):
+    traces = parse(traces)
+    results = defaultdict(int)
+
+    for trace_id, trace in traces.items():
+        for trace_span in trace:
+            # Check if threshold is surpassed by the elements
+            key = (trace_span.service_name)
+            if not limits[key]:
+                print(key,'not found')
+                continue
+            
+            lower, upper = limits[key]
+            if not lower <= trace_span.elapsed_time <= upper:
+                results[key] += 1
+
+    return results

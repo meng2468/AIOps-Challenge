@@ -5,13 +5,15 @@ import requests
 import json
 import time
 from collections import deque
+import threading
+import pickle
 
 from kafka import KafkaConsumer
 
 from server_config import SERVER_CONFIGURATION
 from lib.utils.data_types import PlatformIndex, BusinessIndex, Trace
 
-from lib.utils import trace_build
+from lib.utils import trace
 
 # Three topics are available: platform-index, business-index, trace.
 # Subscribe at least one of them.
@@ -34,6 +36,47 @@ def submit(ctx):
     data = {'content': json.dumps(ctx)}
     r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
+data = {
+    'esb'   : deque(),
+    'kpi'   : deque(),
+    'trace' : deque(),
+}
+
+data_lock = threading.Lock()
+
+QUANTILES_PATH = './lib/models/quantiles.pickle'
+
+with open(QUANTILES_PATH, 'rb') as f:
+        QUANTILES = pickle.load(f)
+
+def process(new_data):
+    ESB_TIME_WINDOW =   5 * 60 * 1000
+    TRACE_TIME_WINDOW = 5 * 60 * 1000
+    KPI_TIME_WINDOW =  60 * 60 * 1000
+    
+    def clean_tables(data_tables):
+            print(f"[DEBUG] Before cleanup sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
+
+            while data_tables['esb'] and data_tables['esb'][0].start_time < data_tables['esb'][-1].start_time - ESB_TIME_WINDOW:
+                data_tables['esb'].popleft() 
+
+            while data_tables['kpi'] and data_tables['kpi'][0].timestamp < data_tables['kpi'][-1].timestamp - KPI_TIME_WINDOW:
+                data_tables['kpi'].popleft()
+
+            while data_tables['trace'] and data_tables['trace'][0].start_time < data_tables['trace'][-1].start_time - TRACE_TIME_WINDOW:
+                data_tables['trace'].popleft()
+
+            print(f"[DEBUG] After cleanup, sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
+
+    # update global data
+    with data_lock:
+        data['esb'].extend(new_data['esb'])
+        data['kpi'].extend(new_data['kpi'])
+        data['trace'].extend(new_data['trace'])
+        clean_tables(data)
+        analysis = trace.get_anomalous_hosts_count(QUANTILES, data['trace'])
+
+    print(analysis)
 
 def main():
     '''Consume data and react'''
@@ -46,25 +89,6 @@ def main():
         'trace' : deque(),
     }
 
-    esb_time_window =   5 * 60 * 1000
-    trace_time_window = 5 * 60 * 1000
-    kpi_time_window =  60 * 60 * 1000
-
-    def clean_tables():
-        
-        print(f"[DEBUG] Before cleanup sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
-
-        while data_tables['esb'][0].start_time < data_tables['esb'][-1].start_time - esb_time_window:
-            data_tables['esb'].popleft() 
-
-        while data_tables['kpi'][0].timestamp < data_tables['kpi'][-1].timestamp - kpi_time_window:
-            data_tables['kpi'].popleft()
-
-        while data_tables['trace'][0].start_time < data_tables['trace'][-1].start_time - trace_time_window:
-            data_tables['trace'].popleft()
-
-        print(f"[DEBUG] After cleanup, sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
-
     for message in CONSUMER:
         data = json.loads(message.value.decode('utf8'))
 
@@ -73,12 +97,12 @@ def main():
         elif message.topic == 'business-index':
             data_tables['esb'].extend(BusinessIndex(item) for key in data['body'] for item in data['body'][key])
 
-            clean_tables()
-
-            start = time.time()
-            trace_build.parse(data_tables['trace'])
-            end = time.time()
-            print(f'Parsing traces took {round(end - start,5)}s')
+            threading.Thread(target=process, args=(data_tables,)).start()
+            data_tables = {
+                'esb'   : deque(),
+                'kpi'   : deque(),
+                'trace' : deque(),
+            }
 
         else:  # message.topic == 'trace'
             data_tables['trace'].append(Trace(data))
