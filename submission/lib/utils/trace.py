@@ -67,6 +67,7 @@ def get_anomalous_hosts_count(limits, traces):
         #     anomalous_trace_count += 1
 
 
+    missing_keys = []
     for trace_id, trace in traces.items():
         
         # generate trace tree depth
