@@ -4,6 +4,7 @@ import zipfile
 
 from datetime import datetime
 from datetime import timedelta
+from pytz import timezone
 import time
 
 import csv
@@ -16,10 +17,12 @@ def unzip_all():
             zip.extractall()
 
 def get_timestamp_window(str_time):
+    tz = tzinfo=timezone('asia/shanghai')
     start_time = datetime.strptime(str_time,'%Y/%m/%d %H:%M')
-    # Change hours to time difference between you and China in April/May
-    window_start = start_time - timedelta(hours=6) - timedelta(minutes=25)
-    window_finish = start_time - timedelta(hours=6) + timedelta(minutes=5)
+    start_time = tz.localize(start_time)
+    
+    window_start = start_time - timedelta(minutes=2)
+    window_finish = start_time + timedelta(minutes=5)
     return window_start.timestamp()*1000, window_finish.timestamp()*1000
 
 def get_formatted_anoms(anomalies):
@@ -82,12 +85,12 @@ def generate_folder(anomaly):
     kpi = load_kpi(data_folder+'/平台指标', anomaly['wt_start'], anomaly['wt_stop'])
 
     print('Saving data')
-    esb.to_csv(anomaly['folder'] + '/esb.csv', index=False)
-    trace.to_csv(anomaly['folder'] + '/trace.csv', index=False)
-    kpi.to_csv(anomaly['folder'] + '/host.csv', index=False)
+    esb.sort_values('startTime').to_csv(anomaly['folder'] + '/esb.csv', index=False)
+    trace.sort_values('startTime').to_csv(anomaly['folder'] + '/trace.csv', index=False)
+    kpi.sort_values('timestamp').to_csv(anomaly['folder'] + '/host.csv', index=False)
 
 if __name__ == '__main__':
-    unzip_all()
+    # unzip_all()
     anomalies = pd.read_csv('anomalies.data')
     anomalies = get_formatted_anoms(anomalies)
     for i in range(len(anomalies)):
