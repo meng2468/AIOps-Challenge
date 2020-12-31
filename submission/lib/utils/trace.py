@@ -43,18 +43,27 @@ def parse(traces):
 
 def get_anomalous_hosts_count(limits, traces):
     traces = parse(traces)
-    results = defaultdict(int)
+    results = defaultdict(lambda: [0,0])
 
-    for trace_id, trace in traces.items():
+    anomalous_trace_count = 0
+    for trace_id, trace in traces.items(): 
+        is_anomalous = False
         for trace_span in trace:
             # Check if threshold is surpassed by the elements
             key = (trace_span.service_name)
             if not limits[key]:
-                print(key,'not found')
+                # print(key,'not found')
                 continue
             
             lower, upper = limits[key]
-            if not lower <= trace_span.elapsed_time <= upper:
-                results[key] += 1
+            if not lower <= trace_span.elapsed_time <= upper or trace_span.success == False:
+                results[key][0] += 1
+                is_anomalous = True
+            results[key][1] += 1
+            if isinstance(trace_span.success, str):
+                raise ValueError('Sccess is string')
 
-    return results
+        if is_anomalous:
+            anomalous_trace_count += 1
+
+    return anomalous_trace_count / len(traces), results # percentage of traces, individual counts
