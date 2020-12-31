@@ -35,6 +35,9 @@ def save_results(pickle_path):
         traces = format_trace(anomalies.iloc[i,:])
         print('Run meow meow')
         _, result = trace.get_anomalous_hosts_count(limits,traces)
+        for i in result:
+            if type(result[i]) == list:
+                result[i] = int((result[i][0] / result[i][1])*10000)/10000
         result['fault'] = anomaly['fault']
         result['host'] = anomaly['host']
         result['kpi'] = anomaly['kpi']
@@ -61,4 +64,3 @@ def check_max_anom(results):
 if __name__ == '__main__':
     pickle_path = 'models/quantiles_0.0001.pickle'
     save_results(pickle_path)
-    # check_max_anom('results.csv')
