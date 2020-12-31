@@ -46,27 +46,7 @@ def get_anomalous_hosts_count(limits, traces):
     results = defaultdict(lambda: [0,0])
 
     anomalous_trace_count = 0
-    # for trace_id, trace in traces.items(): 
-    #     is_anomalous = False
-    #     for trace_span in trace:
-    #         # Check if threshold is surpassed by the elements
-    #         key = (trace_span.service_name)
-    #         if not limits[key]:
-    #             # print(key,'not found')
-    #             continue
-            
-    #         lower, upper = limits[key]
-            # if not lower <= trace_span.elapsed_time <= upper or trace_span.success == False:
-            #     results[key][0] += 1
-            #     is_anomalous = True
-            # results[key][1] += 1
-            # if isinstance(trace_span.success, str):
-            #     raise ValueError('Sccess is string')
-
-        # if is_anomalous:
-        #     anomalous_trace_count += 1
-
-
+    
     missing_keys = []
     for trace_id, trace in traces.items():
         

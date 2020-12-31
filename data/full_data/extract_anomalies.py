@@ -90,7 +90,7 @@ def generate_folder(anomaly):
     kpi.sort_values('timestamp').to_csv(anomaly['folder'] + '/host.csv', index=False)
 
 if __name__ == '__main__':
-    # unzip_all()
+    unzip_all()
     anomalies = pd.read_csv('anomalies.data')
     anomalies = get_formatted_anoms(anomalies)
     for i in range(len(anomalies)):
