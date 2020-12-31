@@ -23,7 +23,7 @@ def format_trace(anomaly):
     
     return traces
 
-def save_results(pickle_path):
+def save_results(pickle_path, output):
     df = pd.DataFrame(columns=['fault'])
     with open(pickle_path, 'rb') as f:
         limits = pickle.load(f)
@@ -42,7 +42,7 @@ def save_results(pickle_path):
         result['host'] = anomaly['host']
         result['kpi'] = anomaly['kpi']
         df = df.append(result, ignore_index=True)
-        df.to_csv('results.csv', index=False)
+        df.to_csv(output, index=False)
 
 # Table anomaly logic
 def get_anomaly(anom_num, results):
@@ -68,8 +68,10 @@ def check_max_anom(results):
             print(results.iloc[i,:]['fault'], 'not-detected')
     print('Accuracy: ', anoms_found/anoms_checked)
 
+
 # test different window sizes
 # test different thresholds
 if __name__ == '__main__':
-    pickle_path = 'models/quantiles_0.0001.pickle'
-    save_results(pickle_path)
+    for i in range(5):
+        pickle_path = 'models/quantiles_0.000'+str(i)+'.pickle'
+        save_results(pickle_path,'results'+str(i)+'.csv')
