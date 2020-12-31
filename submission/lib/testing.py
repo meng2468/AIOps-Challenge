@@ -55,12 +55,21 @@ def get_anomaly(anom_num, results):
     return anom
 
 def check_max_anom(results):
+    anoms_checked = 0
+    anoms_found = 0
+    print('*'*40)
+    print('Testing host anomaly localisation')
     for i in range(len(results)):
+        anoms_checked += 1
         if results.iloc[i,:]['host'] == get_anomaly(i, results):
+            anoms_found += 1
             print(results.iloc[i,:]['fault'], 'detected')
         else:
             print(results.iloc[i,:]['fault'], 'not-detected')
+    print('Accuracy: ', anoms_found/anoms_checked)
 
+# test different window sizes
+# test different thresholds
 if __name__ == '__main__':
     pickle_path = 'models/quantiles_0.0001.pickle'
     save_results(pickle_path)
