@@ -1,4 +1,4 @@
-from data_types import Trace, BusinessIndex, PlatformIndex
+from .data_types import Trace, BusinessIndex, PlatformIndex
 import numpy as np
 
 from collections import defaultdict
@@ -51,7 +51,8 @@ def get_anomalous_hosts_count(limits, traces):
             # Check if threshold is surpassed by the elements
             key = (trace_span.service_name)
             if not limits[key]:
-                missing_keys.append(key)
+                if key not in missing_keys:
+                    missing_keys.append(key)
                 continue
             
             lower, upper = limits[key]
