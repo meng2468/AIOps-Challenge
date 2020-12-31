@@ -45,16 +45,18 @@ def get_anomalous_hosts_count(limits, traces):
     traces = parse(traces)
     results = defaultdict(int)
 
+    missing_keys = []
     for trace_id, trace in traces.items():
         for trace_span in trace:
             # Check if threshold is surpassed by the elements
             key = (trace_span.service_name)
             if not limits[key]:
-                print(key,'not found')
+                if key not in missing_keys:
+                    missing_keys.append(key)
                 continue
             
             lower, upper = limits[key]
             if not lower <= trace_span.elapsed_time <= upper:
                 results[key] += 1
-
+    print('Missing threshold for', missing_keys)
     return results
