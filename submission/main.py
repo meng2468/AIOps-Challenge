@@ -79,7 +79,10 @@ def process(new_data):
         data['kpi'].extend(new_data['kpi'])
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
-        count, analysis = trace.get_anomalous_hosts_count(QUANTILES, data['trace'])
+        if data['trace']:
+            count, analysis = trace.get_anomalous_hosts_count(QUANTILES, data['trace'])
+            print(count, sorted(tuple(map(lambda x: (x, analysis[x][0] / analysis[x][1]), analysis)), key=lambda x: -x[1]))
+
     
 
 def main():

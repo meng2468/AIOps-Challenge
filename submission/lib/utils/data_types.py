@@ -31,7 +31,7 @@ class Trace():  # pylint: disable=invalid-name,too-many-instance-attributes,too-
     '''Structure for traces'''
 
     __slots__ = ['call_type', 'start_time', 'elapsed_time', 'success',
-                 'trace_id', 'id', 'pid', 'cmdb_id', 'service_name', 'ds_name']
+                 'trace_id', 'id', 'pid', 'cmdb_id', 'service_name', 'ds_name', 'depth']
 
     def __init__(self, data):
         self.call_type = data['callType']
