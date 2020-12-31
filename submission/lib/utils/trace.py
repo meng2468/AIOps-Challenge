@@ -43,20 +43,52 @@ def parse(traces):
 
 def get_anomalous_hosts_count(limits, traces):
     traces = parse(traces)
-    results = defaultdict(int)
+    results = defaultdict(lambda: [0,0])
 
+    anomalous_trace_count = 0
+    
     missing_keys = []
     for trace_id, trace in traces.items():
+        
+        # generate trace tree depth
+        depth = {'None' : 0}
+        trace.sort(key=lambda x: x.start_time)
         for trace_span in trace:
-            # Check if threshold is surpassed by the elements
-            key = (trace_span.service_name)
-            if not limits[key]:
-                if key not in missing_keys:
-                    missing_keys.append(key)
+            if trace_span.pid not in depth:
+                continue
+
+            trace_span.depth = depth[trace_span.pid] + 1
+            depth[trace_span.id] = trace_span.depth
+
+        for trace_span in trace:
+            if trace_span.pid not in depth: # data missing atm
+                trace_span.depth = -1
+                continue
+            trace_span.depth = depth[trace_span.pid] + 1
+            depth[trace_span.id] = trace_span.depth
+
+        if len(list(limits.keys())[0]) == 2:
+            # no host in the key
+            get_key = lambda x: (x.depth, x.call_type)
+        else:
+            get_key = lambda x: (x.depth, x.call_type, x.cmdb_id)
+        
+
+        is_anomalous = False
+        # detect individual anomalies
+        for trace_span in trace:
+            key = get_key(trace_span)
+            if key not in limits:
+                # print(key)
                 continue
             
             lower, upper = limits[key]
-            if not lower <= trace_span.elapsed_time <= upper:
-                results[key] += 1
-    print('Missing threshold for', missing_keys)
-    return results
+            if not lower <= trace_span.elapsed_time <= upper or trace_span.success == False:
+                results[trace_span.service_name][0] += 1
+                is_anomalous = True
+            results[trace_span.service_name][1] += 1
+        
+        if is_anomalous:
+            anomalous_trace_count += 1
+
+    return anomalous_trace_count / len(traces), results # percentage of traces, individual counts

@@ -6,6 +6,7 @@ import json
 import pandas as pd
 import os
 import csv
+import sys
 
 if __name__ == '__main__':
     DATA_PATH = os.path.join('.')
@@ -26,12 +27,19 @@ if __name__ == '__main__':
 
     print('Loading data...')
 
+    if len(sys.argv) < 2:
+        print('Loading default test data')
+        DIR = 'server_data/'
+    else:
+        print(f'Loading {sys.argv[1]} data')
+        DIR = sys.argv[1]
+
     # Load data here
-    esb = pd.read_csv('server_data/esb.csv')
-    kpi = pd.read_csv('server_data/kpis.csv')
+    esb = pd.read_csv(f'{DIR}/esb.csv')
+    kpi = pd.read_csv(f'{DIR}/host.csv')
 
     TRACE_BATCH_SIZE = 10000
-    trace_fd = pd.read_csv('server_data/trace.csv', chunksize=TRACE_BATCH_SIZE)
+    trace_fd = pd.read_csv(f'{DIR}/trace.csv', chunksize=TRACE_BATCH_SIZE)
     trace = next(trace_fd)
 
     esb_index = 0
@@ -45,7 +53,7 @@ if __name__ == '__main__':
     print('Data loading completed. Initiating message sequence.')
     print(f'Total sizes to be read: ({max_esb}, {max_kpi}, {max_trace})')
     counter = 0
-    while esb_index < max_esb or kpi_index < max_kpi or trace_index < max_trace:
+    while esb_index < max_esb or kpi_index < max_kpi or trace_index + counter * TRACE_BATCH_SIZE < max_trace:
         esb_time = esb.iloc[esb_index].startTime
         kpi_time = kpi.iloc[kpi_index].timestamp
         trace_time = trace.iloc[trace_index].startTime

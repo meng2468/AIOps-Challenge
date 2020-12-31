@@ -7,6 +7,7 @@ import time
 from collections import deque
 import threading
 import pickle
+import sys
 
 from kafka import KafkaConsumer
 
@@ -44,14 +45,18 @@ data = {
 
 data_lock = threading.Lock()
 
-QUANTILES_PATH = './lib/models/quantiles.pickle'
+if len(sys.argv) < 2:
+    QUANTILES_PATH = './lib/models/quantiles.pickle'
+else:
+    print(f'Loading quantiles {sys.argv[1]}')
+    QUANTILES_PATH = sys.argv[1]
 
 with open(QUANTILES_PATH, 'rb') as f:
         QUANTILES = pickle.load(f)
 
 def process(new_data):
     ESB_TIME_WINDOW =   5 * 60 * 1000
-    TRACE_TIME_WINDOW = 5 * 60 * 1000
+    TRACE_TIME_WINDOW = 1 * 60 * 1000
     KPI_TIME_WINDOW =  60 * 60 * 1000
     
     def clean_tables(data_tables):
@@ -74,9 +79,11 @@ def process(new_data):
         data['kpi'].extend(new_data['kpi'])
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
-        analysis = trace.get_anomalous_hosts_count(QUANTILES, data['trace'])
+        if data['trace']:
+            count, analysis = trace.get_anomalous_hosts_count(QUANTILES, data['trace'])
+            print(count, sorted(tuple(map(lambda x: (x, analysis[x][0] / analysis[x][1]), analysis)), key=lambda x: -x[1]))
 
-    print(analysis)
+    
 
 def main():
     '''Consume data and react'''

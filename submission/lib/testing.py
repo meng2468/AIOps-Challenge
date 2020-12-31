@@ -34,7 +34,7 @@ def save_results(pickle_path, results_name):
         print('Loading anomaly', anomaly['folder'])
         traces = format_trace(anomalies.iloc[i,:])
         print('Run meow meow')
-        result = trace.get_anomalous_hosts_count(limits,traces)
+        _, result = trace.get_anomalous_hosts_count(limits,traces)
         result['fault'] = anomaly['fault']
         result['host'] = anomaly['host']
         result['kpi'] = anomaly['kpi']
