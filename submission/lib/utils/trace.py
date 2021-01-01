@@ -117,7 +117,7 @@ PARENT_DATA = {
     'os_022': 'os_001',
 }
 
-def filter_results(services):
+def filter_results(services, debug=False):
     # docker can be remote or local
     remote = defaultdict(int)
     local  = defaultdict(int)
@@ -163,8 +163,9 @@ def filter_results(services):
 
     if len(list(filter(lambda x: x, [docker_os, fly_remote, os_parent, dbs]))) > 1:
         # FIXME not 100% sure of the result, im putting in the logic to skip this one and try out later
-        print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
-        print([*docker, *os_res, *fly_remote, *os_parent, *dbs])
+        if debug:
+            print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
+            print([*docker, *os_res, *fly_remote, *os_parent, *dbs])
         return None
     
     return [*docker, *os_res, *fly_remote, *os_parent, *dbs]
@@ -201,4 +202,4 @@ def table(limits, traces, debug=False):
 
     final_services = list(map(lambda x: x[0], filter(lambda x: x[1] >= related, analysis)))
 
-    return filter_results(final_services)
+    return filter_results(final_services, debug=debug)

@@ -8,6 +8,7 @@ from collections import deque
 import threading
 import pickle
 import sys
+import csv
 
 from kafka import KafkaConsumer
 
@@ -54,6 +55,9 @@ else:
 with open(QUANTILES_PATH, 'rb') as f:
         QUANTILES = pickle.load(f)
 
+last_submission = None
+sub_lock = threading.Lock()
+
 def process(new_data):
     ESB_TIME_WINDOW =   5 * 60 * 1000
     TRACE_TIME_WINDOW = 1 * 60 * 1000
@@ -73,6 +77,8 @@ def process(new_data):
 
             print(f"[DEBUG] After cleanup, sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
 
+    global last_submission
+
     # update global data
     with data_lock:
         data['esb'].extend(new_data['esb'])
@@ -80,9 +86,19 @@ def process(new_data):
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
         if data['trace']:
-            result = trace.table(QUANTILES, data['trace'], debug=False)
-            if result:
-                submit(result)
+            now = time.time()
+            
+            # check if can submit (5min window submission)
+            if not last_submission or now - last_submission >= 5*60*1000: 
+                result = trace.table(QUANTILES, data['trace'], debug=False)
+                if result:
+                    with open('anomalies_found.csv','a+') as f:
+                        writer = csv.writer(f)
+                        writer.writerow([now, *result])
+                    print(result)
+                    # submit(result)
+                    last_submission = now
+
 
     
 
