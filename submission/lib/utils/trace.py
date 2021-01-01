@@ -83,12 +83,46 @@ def get_anomalous_hosts_count(limits, traces):
                 continue
             
             lower, upper = limits[key]
+            res_key = (trace_span.service_name, trace_span.cmdb_id)
             if not lower <= trace_span.elapsed_time <= upper or trace_span.success == False:
-                results[trace_span.service_name][0] += 1
+                results[res_key][0] += 1
                 is_anomalous = True
-            results[trace_span.service_name][1] += 1
+            results[res_key][1] += 1
         
         if is_anomalous:
             anomalous_trace_count += 1
 
     return anomalous_trace_count / len(traces), results # percentage of traces, individual counts
+
+
+def table(limits, traces, debug=False):
+    anom_count, result = get_anomalous_hosts_count(limits, traces)
+    
+    # filter out CSF and 0 results
+    analysis = list(map(lambda x: (x[0], x[1][0] / x[1][1]), filter(lambda x: x[1][0] != 0 and 'csf' not in x[0][0], result.items())))
+
+    if debug:
+        print(analysis)
+        columns = sorted(set(map(lambda x: x[0][1], analysis)))
+        rows = sorted(set(map(lambda x: x[0][0], analysis)))
+        import pandas as pd
+        df = pd.DataFrame(columns=columns, index=rows).fillna(0)
+        for item in analysis:
+            (row, col), val = item
+            df.loc[row, col] = val
+        print(df)
+
+    if not analysis:
+        return None
+
+    maximum = max(analysis, key=lambda x: x[1])
+    print(f'Maximum is {maximum}')
+
+    threshold = 0.7
+
+    if maximum[1] < threshold:
+        return None
+
+    related = maximum[1] * 0.9 # only count those within 10% of it
+
+    return list(filter(lambda x: x[1] >= related, analysis))
