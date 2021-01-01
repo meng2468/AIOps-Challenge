@@ -89,7 +89,7 @@ def process(new_data):
             now = time.time()
             
             # check if can submit (5min window submission)
-            if not last_submission or now - last_submission >= 5*60*1000: 
+            if not last_submission or now - last_submission >= 5*60: 
                 result = trace.table(QUANTILES, data['trace'], debug=False)
                 if result:
                     with open('anomalies_found.csv','a+') as f:
