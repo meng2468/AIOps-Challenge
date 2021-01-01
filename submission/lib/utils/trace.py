@@ -26,18 +26,27 @@ def parse(traces):
 
     # Remove time of the children from the parent
     for trace in trace_dict.values():
-        times = defaultdict(int)
-        csf_items = {} # {<id>: <object reference>}
-
-        for i in range(len(trace) - 1, 0, -1):
-            times[trace[i].pid] += trace[i].elapsed_time
-            if trace[i].call_type == 'CSF':
-                csf_items[trace[i].id] = trace[i]
-        
+        child_sums = defaultdict(int)
         for el in trace:
-            el.elapsed_time -= times[el.id]
-            if el.pid in csf_items:
-                csf_items[el.pid].service_name = el.cmdb_id
+            child_sums[el.pid] += el.elapsed_time
+
+        for el in filter(lambda x: x.id in child_sums, trace):
+            el.elapsed_time -= child_sums[el.id]
+
+    #TODO csf and remote service transformation. henry suggests OSB service = cmdb id
+    #csf service = child cmdb_id
+    for trace in trace_dict.values():
+        csfs = {}
+        for el in filter(lambda x: x.call_type == 'CSF', trace):
+            csfs[el.id] = el
+        
+        for el in filter(lambda x: x.pid in csfs, trace):
+            csfs[el.pid].service_name = el.cmdb_id
+
+    #remote service = remote cmdb_id
+    for trace in trace_dict.values():
+        for el in filter(lambda x: x.call_type == 'RemoteProcess', trace):
+            el.service_name = el.cmdb_id
 
     return trace_dict
 
@@ -132,6 +141,7 @@ def filter_results(services):
         os_res.extend([['os_001', x] for x in ('Sent_queue','Received_queue')])
     elif len(os_021) > 0:
         os_res.extend([['os_021', x] for x in ('Sent_queue','Received_queue')])
+    docker_os = os_res + docker
 
     # fly remote
     fly_remote = list(filter(lambda x: x[0] == 'fly_remote', services))
@@ -141,20 +151,17 @@ def filter_results(services):
         fly_remote = []
 
     # problem in parent server
-    dockers_calls = filter(lambda x: 'docker' in x[0] or 'docker' in x[1], services)
+    dockers_calls = set(map(lambda x: x[0] if 'docker' in x[0] else x[1], filter(lambda x: 'docker' in x[0] or 'docker' in x[1], services)))
     parents = defaultdict(int)
     for call in dockers_calls:
-        if 'docker' in call[0]:
-            parents[PARENT_DATA[call[0]]] += 1
-        else:
-            parents[PARENT_DATA[call[1]]] += 1
+        parents[PARENT_DATA[call]] += 1
     
     os_parent = [[x[0], y] for x in filter(lambda x: x[1] > 1, parents.items()) for y in ('Sent_queue','Received_queue')]
 
     # FIXME there was no db in meow meow's thing. i am putting in all db possibilities
     dbs = [[x,y] for x in set(map(lambda x: x[0], filter(lambda x: 'db' in x[0], services))) for y in ('On_Off_State', 'tnsping_result_time', 'Proc_User_Used_Pct', 'Proc_Used_Pct','Sess_Connect')]
 
-    if len(list(filter(lambda x: x, [docker, os_res, fly_remote, os_parent, dbs]))) > 1:
+    if len(list(filter(lambda x: x, [docker_os, fly_remote, os_parent, dbs]))) > 1:
         # FIXME not 100% sure of the result, im putting in the logic to skip this one and try out later
         print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
         print([*docker, *os_res, *fly_remote, *os_parent, *dbs])
