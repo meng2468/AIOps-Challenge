@@ -152,11 +152,12 @@ def filter_results(services):
     os_parent = [[x[0], y] for x in filter(lambda x: x[1] > 1, parents.items()) for y in ('Sent_queue','Received_queue')]
 
     # FIXME there was no db in meow meow's thing. i am putting in all db possibilities
-    dbs = [[x[0],y] for x in filter(lambda x: 'db' in x[0], services) for y in ('On_Off_State', 'tnsping_result_time', 'Proc_User_Used_Pct', 'Proc_Used_Pct','Sess_Connect')]
+    dbs = [[x,y] for x in set(map(lambda x: x[0], filter(lambda x: 'db' in x[0], services))) for y in ('On_Off_State', 'tnsping_result_time', 'Proc_User_Used_Pct', 'Proc_Used_Pct','Sess_Connect')]
 
     if len(list(filter(lambda x: x, [docker, os_res, fly_remote, os_parent, dbs]))) > 1:
         # FIXME not 100% sure of the result, im putting in the logic to skip this one and try out later
         print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
+        print([*docker, *os_res, *fly_remote, *os_parent, *dbs])
         return None
     
     return [*docker, *os_res, *fly_remote, *os_parent, *dbs]
