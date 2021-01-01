@@ -95,6 +95,72 @@ def get_anomalous_hosts_count(limits, traces):
     return anomalous_trace_count / len(traces), results # percentage of traces, individual counts
 
 
+PARENT_DATA = {
+    'docker_001':'os_017',
+    'docker_002':'os_018',
+    'docker_003':'os_019',
+    'docker_004':'os_020',
+    'docker_005':'os_017',
+    'docker_006':'os_018',
+    'docker_007':'os_019',
+    'docker_008':'os_020',
+    'os_021': 'os_001',
+    'os_022': 'os_001',
+}
+
+def filter_results(services):
+    # docker can be remote or local
+    remote = defaultdict(int)
+    local  = defaultdict(int)
+    for service in filter(lambda x: 'docker' in x[0], services):
+        if service[0] == service[1] or (service[0] in PARENT_DATA and service[1] == PARENT_DATA[service[0]]):
+            local[service[0]] += 1
+        else:
+            remote[service[0]] += 1
+    if len(local) == 0:
+        # network problem
+        docker = [[x, None] for x in remote.keys()]
+    else:
+        docker = [[x, 'cpu_container_used'] for x in local.keys()]
+    
+    # os
+    os_021 = list(filter(lambda x: x[1] == 'os_021', services))
+    os_022 = list(filter(lambda x: x[1] == 'os_022', services))
+
+    os_res = []
+    if len(os_021) > 0 and len(os_022) > 0:
+        os_res.extend([['os_001', x] for x in ('Sent_queue','Received_queue')])
+    elif len(os_021) > 0:
+        os_res.extend([['os_021', x] for x in ('Sent_queue','Received_queue')])
+
+    # fly remote
+    fly_remote = list(filter(lambda x: x[0] == 'fly_remote', services))
+    if len(fly_remote) > 0:
+        fly_remote = [['os_009', x] for x in ('Sent_queue','Received_queue')]
+    else:
+        fly_remote = []
+
+    # problem in parent server
+    dockers_calls = filter(lambda x: 'docker' in x[0] or 'docker' in x[1], services)
+    parents = defaultdict(int)
+    for call in dockers_calls:
+        if 'docker' in call[0]:
+            parents[PARENT_DATA[call[0]]] += 1
+        else:
+            parents[PARENT_DATA[call[1]]] += 1
+    
+    os_parent = [[x, y] for x in filter(lambda x: x > 1, parents.values()) for y in ('Sent_queue','Received_queue')]
+
+    # FIXME there was no db in meow meow's thing. i am putting in all db possibilities
+    dbs = [[x,y] for x in filter(lambda x: 'db' in x[0], services) for y in ('On_Off_State', 'tnsping_result_time', 'Proc_User_Used_Pct', 'Proc_Used_Pct','Sess_Connect')]
+
+    if len(list(filter(lambda x: x, [docker, os_res, fly_remote, os_parent, dbs]))) > 1:
+        # FIXME not 100% sure of the result, im putting in the logic to skip this one and try out later
+        print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
+        return None
+    
+    return [*docker, *os_res, *fly_remote, *os_parent, *dbs]
+
 def table(limits, traces, debug=False):
     anom_count, result = get_anomalous_hosts_count(limits, traces)
     
@@ -125,4 +191,6 @@ def table(limits, traces, debug=False):
 
     related = maximum[1] * 0.9 # only count those within 10% of it
 
-    return list(filter(lambda x: x[1] >= related, analysis))
+    final_services = list(map(lambda x: x[0], filter(lambda x: x[1] >= related, analysis)))
+
+    return filter_results(final_services)

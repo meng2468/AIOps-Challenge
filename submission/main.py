@@ -58,7 +58,7 @@ def process(new_data):
     ESB_TIME_WINDOW =   5 * 60 * 1000
     TRACE_TIME_WINDOW = 1 * 60 * 1000
     KPI_TIME_WINDOW =  60 * 60 * 1000
-    
+
     def clean_tables(data_tables):
             print(f"[DEBUG] Before cleanup sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
 
@@ -80,8 +80,9 @@ def process(new_data):
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
         if data['trace']:
-            count, analysis = trace.get_anomalous_hosts_count(QUANTILES, data['trace'])
-            print(count, sorted(tuple(map(lambda x: (x, analysis[x][0] / analysis[x][1]), analysis)), key=lambda x: -x[1]))
+            result = trace.table(QUANTILES, data['trace'], debug=False)
+            if result:
+                submit(result)
 
     
 
