@@ -161,15 +161,16 @@ def filter_results(services, debug=False):
     # FIXME there was no db in meow meow's thing. i am putting in all db possibilities
     dbs = [[x,y] for x in set(map(lambda x: x[0], filter(lambda x: 'db' in x[0], services))) for y in ('On_Off_State', 'tnsping_result_time', 'Proc_User_Used_Pct', 'Proc_Used_Pct','Sess_Connect')]
 
-    if not dbs and len(list(filter(lambda x: x, [docker_os, fly_remote, os_parent, dbs]))) > 1:
+    if not dbs and (len(list(filter(lambda x: x, [docker_os, fly_remote, os_parent, dbs]))) > 1
+                                 or (len(docker) > 1 and docker[0][1] == None)):
         # FIXME not 100% sure of the result, im putting in the logic to skip this one and try out later
         if debug:
             print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
             print([*docker, *os_res, *fly_remote, *os_parent, *dbs])
-        return None
+        return False, [*docker, *os_res, *fly_remote, *os_parent, *dbs]
     if dbs:
-        return dbs
-    return [*docker, *os_res, *fly_remote, *os_parent, *dbs]
+        return True, dbs
+    return True, [*docker, *os_res, *fly_remote, *os_parent, *dbs]
 
 def table(limits, traces, debug=False):
     anom_count, result = get_anomalous_hosts_count(limits, traces)
@@ -188,13 +189,14 @@ def table(limits, traces, debug=False):
             df.loc[row, col] = val
         print(df)
 
-    if not analysis:
+    # Filter not enough amount of trace info. 1000 spans is +- 17 traces only
+    if not analysis or sum(map(lambda x: x[1][1], result.items())) < 1000:
         return None
 
     maximum = max(analysis, key=lambda x: x[1])
     print(f'Maximum is {maximum}')
 
-    threshold = 0.5
+    threshold = 0.4
 
     if maximum[1] < threshold:
         return None

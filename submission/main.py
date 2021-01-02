@@ -60,6 +60,9 @@ with open(QUANTILES_PATH, 'rb') as f:
 last_submission = None
 sub_lock = threading.Lock()
 
+best_effort = -1
+best_effort_result = []
+
 def process(new_data):
     ESB_TIME_WINDOW =   5 * 60 * 1000
     TRACE_TIME_WINDOW = 1 * 60 * 1000
@@ -79,7 +82,16 @@ def process(new_data):
 
             print(f"[DEBUG] After cleanup, sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
 
-    global last_submission
+    global last_submission, best_effort, best_effort_result
+
+    def submit_result(result, now):
+        with open('anomalies_found.csv','a+') as f:
+            writer = csv.writer(f)
+            writer.writerow([now, *result])
+        print(result)
+        submit(result)
+        global last_submission
+        last_submission = now
 
     # update global data
     with data_lock:
@@ -94,16 +106,44 @@ def process(new_data):
             if not last_submission or now - last_submission >= 5*60: 
                 result = trace.table(QUANTILES, data['trace'], debug=False)
                 if result:
-                    with open('anomalies_found.csv','a+') as f:
-                        writer = csv.writer(f)
-                        writer.writerow([now, *result])
-                    print(result)
-                    submit(result)
-                    last_submission = now
+                    # the threshold was crossed
 
+                    status, result = result
 
-    
+                    if status:
+                        # a strict anomaly was found
+                        submit_result(result, now)
 
+                        # reset best_effort
+                        best_effort = -1
+                        best_effort_result = []
+
+                    else: # couldn't find a strict one
+                        print('Non strict')
+                        # if first anomaly, reset index
+                        if best_effort == -1:
+                            best_effort = 5
+                            best_effort_result = []
+                        
+                        # add result
+                        best_effort_result.extend(result)
+                        best_effort -= 1
+
+                        # check if no more tries 
+                        if best_effort == 0:
+                            res = list(map(lambda x: list(x), set(map(lambda x: tuple(x), best_effort_result))))
+                            submit_result(res, now)
+                            best_effort = 0
+                            best_effort_result = []
+                elif best_effort > -1: # there was a recent anomaly found but not strict
+                    print('No detection')
+                    best_effort -= 1
+                    # check if no more tries 
+                    if best_effort == 0:
+                        res = list(map(lambda x: list(x), set(map(lambda x: tuple(x), best_effort_result))))
+                        submit_result(res, now)
+                        best_effort = 0
+                        best_effort_result = []
 def main():
     '''Consume data and react'''
     # Check authorities
