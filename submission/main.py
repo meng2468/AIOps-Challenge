@@ -3,7 +3,6 @@ Example for data consuming.
 '''
 import requests
 import json
-import time
 from collections import deque
 import threading
 import pickle
@@ -104,10 +103,10 @@ def process(new_data):
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
         if data['trace']:
-            now = time.time()
+            now = data['esb'][-1].start_time
             
             # check if can submit (5min window submission)
-            if not last_submission or now - last_submission >= 5*60: 
+            if not last_submission or now - last_submission >= 5*60*1000: 
                 result = trace.table(QUANTILES, data['trace'], debug=False)
                 if result:
                     # the threshold was crossed
@@ -123,30 +122,27 @@ def process(new_data):
                         best_effort_result = []
 
                     else: # couldn't find a strict one
-                        print('Non strict')
                         # if first anomaly, reset index
                         if best_effort == -1:
-                            best_effort = 5
+                            best_effort = now
                             best_effort_result = []
                         
                         # add result
                         best_effort_result.extend(result)
-                        best_effort -= 1
 
                         # check if no more tries 
-                        if best_effort == 0:
+                        if best_effort <= now - 5*60*1000:
                             res = list(map(lambda x: list(x), set(map(lambda x: tuple(x), best_effort_result))))
                             submit_result(res, now)
-                            best_effort = 0
+                            best_effort = -1 # reset
                             best_effort_result = []
-                elif best_effort > -1: # there was a recent anomaly found but not strict
-                    print('No detection')
-                    best_effort -= 1
+                            
+                elif best_effort != -1: # there was a recent anomaly found but not strict
                     # check if no more tries 
-                    if best_effort == 0:
+                    if best_effort <= now - 5*60*1000:
                         res = list(map(lambda x: list(x), set(map(lambda x: tuple(x), best_effort_result))))
                         submit_result(res, now)
-                        best_effort = 0
+                        best_effort = -1
                         best_effort_result = []
 def main():
     '''Consume data and react'''
