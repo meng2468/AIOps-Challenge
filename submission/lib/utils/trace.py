@@ -145,7 +145,7 @@ def filter_results(services, debug=False):
     docker_os = os_res + docker
 
     # fly remote
-    fly_remote = list(filter(lambda x: x[0] == 'fly_remote', services))
+    fly_remote = list(filter(lambda x: 'fly_remote' in x[0], services))
     if len(fly_remote) > 0:
         fly_remote = [['os_009', x] for x in ('Sent_queue','Received_queue')]
     else:

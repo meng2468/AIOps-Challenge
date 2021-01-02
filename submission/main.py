@@ -88,6 +88,9 @@ def process(new_data):
     global last_submission, best_effort, best_effort_result
 
     def submit_result(result, now):
+        if not result:
+            print('[ERROR] Trying to submit empty anomaly')
+            return
         with open('anomalies_found.csv','a+') as f:
             writer = csv.writer(f)
             writer.writerow([now, *result])
