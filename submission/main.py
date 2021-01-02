@@ -3,11 +3,11 @@ Example for data consuming.
 '''
 import requests
 import json
-import time
 from collections import deque
 import threading
 import pickle
 import sys
+import csv
 
 from kafka import KafkaConsumer
 
@@ -35,7 +35,9 @@ def submit(ctx):
         assert(isinstance(tp[0], str))
         assert(isinstance(tp[1], str) or (tp[1] is None))
     data = {'content': json.dumps(ctx)}
-    r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
+    if SERVER_CONFIGURATION['SUBMIT_IP']:
+        print('Submitting...')
+        r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
 data = {
     'esb'   : deque(),
@@ -54,6 +56,12 @@ else:
 with open(QUANTILES_PATH, 'rb') as f:
         QUANTILES = pickle.load(f)
 
+last_submission = None
+sub_lock = threading.Lock()
+
+best_effort = -1
+best_effort_result = []
+
 def process(new_data):
     ESB_TIME_WINDOW =   5 * 60 * 1000
     TRACE_TIME_WINDOW = 1 * 60 * 1000
@@ -62,6 +70,10 @@ def process(new_data):
     def clean_tables(data_tables):
             print(f"[DEBUG] Before cleanup sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
 
+            data_tables['esb']   = deque(sorted(data_tables['esb'], key=lambda x: x.start_time))
+            data_tables['trace'] = deque(sorted(data_tables['trace'], key=lambda x: x.start_time))
+            data_tables['kpi']   = deque(sorted(data_tables['kpi'], key=lambda x: x.timestamp))
+            
             while data_tables['esb'] and data_tables['esb'][0].start_time < data_tables['esb'][-1].start_time - ESB_TIME_WINDOW:
                 data_tables['esb'].popleft() 
 
@@ -73,6 +85,17 @@ def process(new_data):
 
             print(f"[DEBUG] After cleanup, sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
 
+    global last_submission, best_effort, best_effort_result
+
+    def submit_result(result, now):
+        with open('anomalies_found.csv','a+') as f:
+            writer = csv.writer(f)
+            writer.writerow([now, *result])
+        print(result)
+        submit(result)
+        global last_submission
+        last_submission = now
+
     # update global data
     with data_lock:
         data['esb'].extend(new_data['esb'])
@@ -80,12 +103,47 @@ def process(new_data):
         data['trace'].extend(new_data['trace'])
         clean_tables(data)
         if data['trace']:
-            result = trace.table(QUANTILES, data['trace'], debug=False)
-            if result:
-                submit(result)
+            now = data['esb'][-1].start_time
+            
+            # check if can submit (5min window submission)
+            if not last_submission or now - last_submission >= 5*60*1000: 
+                result = trace.table(QUANTILES, data['trace'], debug=True)
+                if result:
+                    # the threshold was crossed
 
-    
+                    status, result = result
 
+                    if status:
+                        # a strict anomaly was found
+                        submit_result(result, now)
+
+                        # reset best_effort
+                        best_effort = -1
+                        best_effort_result = []
+
+                    else: # couldn't find a strict one
+                        # if first anomaly, reset index
+                        if best_effort == -1:
+                            best_effort = now
+                            best_effort_result = []
+                        
+                        # add result
+                        best_effort_result.extend(result)
+
+                        # check if no more tries 
+                        if best_effort <= now - 5*60*1000:
+                            res = list(map(lambda x: list(x), set(map(lambda x: tuple(x), best_effort_result))))
+                            submit_result(res, now)
+                            best_effort = -1 # reset
+                            best_effort_result = []
+                            
+                elif best_effort != -1: # there was a recent anomaly found but not strict
+                    # check if no more tries 
+                    if best_effort <= now - 5*60*1000:
+                        res = list(map(lambda x: list(x), set(map(lambda x: tuple(x), best_effort_result))))
+                        submit_result(res, now)
+                        best_effort = -1
+                        best_effort_result = []
 def main():
     '''Consume data and react'''
     # Check authorities
