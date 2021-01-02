@@ -36,7 +36,9 @@ def submit(ctx):
         assert(isinstance(tp[0], str))
         assert(isinstance(tp[1], str) or (tp[1] is None))
     data = {'content': json.dumps(ctx)}
-    r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
+    if SERVER_CONFIGURATION['SUBMIT_IP']:
+        print('Submitting...')
+        r = requests.post(SERVER_CONFIGURATION["SUBMIT_IP"], data=json.dumps(data))
 
 data = {
     'esb'   : deque(),
@@ -96,7 +98,7 @@ def process(new_data):
                         writer = csv.writer(f)
                         writer.writerow([now, *result])
                     print(result)
-                    # submit(result)
+                    submit(result)
                     last_submission = now
 
 

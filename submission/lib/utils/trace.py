@@ -194,12 +194,12 @@ def table(limits, traces, debug=False):
     maximum = max(analysis, key=lambda x: x[1])
     print(f'Maximum is {maximum}')
 
-    threshold = 0.7
+    threshold = 0.5
 
     if maximum[1] < threshold:
         return None
 
-    related = maximum[1] * 0.9 # only count those within 10% of it
+    related = maximum[1] - 0.05 # only count those within 0.05% 
 
     final_services = list(map(lambda x: x[0], filter(lambda x: x[1] >= related, analysis)))
 
