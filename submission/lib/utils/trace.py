@@ -118,7 +118,7 @@ PARENT_DATA = {
     'os_022': 'os_001',
 }
 
-def filter_results(services, debug=False):
+def filter_results(services, maximum, debug=False):
     # docker can be remote or local
     remote = defaultdict(int)
     local  = defaultdict(int)
@@ -163,7 +163,8 @@ def filter_results(services, debug=False):
     dbs = [[x,y] for x in set(map(lambda x: x[0], filter(lambda x: 'db' in x[0], services))) for y in ('On_Off_State', 'tnsping_result_time', 'Proc_User_Used_Pct', 'Proc_Used_Pct','Sess_Connect')]
 
     if not dbs and (len(list(filter(lambda x: x, [docker_os, fly_remote, os_parent, dbs]))) > 1
-                                 or (len(docker) > 1 and docker[0][1] == None)):
+                                 or (len(docker) > 1 and docker[0][1] == None)
+                                 or maximum < 0.7):
         # FIXME not 100% sure of the result, im putting in the logic to skip this one and try out later
         if debug:
             print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
@@ -213,4 +214,4 @@ def table(limits, traces, debug=False):
 
     final_services = list(map(lambda x: x[0], filter(lambda x: x[1] >= related, analysis)))
 
-    return filter_results(final_services, debug=debug)
+    return filter_results(final_services, maximum[1], debug=debug)
