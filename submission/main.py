@@ -107,7 +107,7 @@ def process(new_data):
             
             # check if can submit (5min window submission)
             if not last_submission or now - last_submission >= 5*60*1000: 
-                result = trace.table(QUANTILES, data['trace'], debug=False)
+                result = trace.table(QUANTILES, data['trace'], debug=True)
                 if result:
                     # the threshold was crossed
 

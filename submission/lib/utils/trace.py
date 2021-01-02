@@ -1,5 +1,6 @@
 from .data_types import Trace, BusinessIndex, PlatformIndex
 import numpy as np
+import time
 
 from collections import defaultdict
 
@@ -167,6 +168,9 @@ def filter_results(services, debug=False):
         if debug:
             print('[INFO] Anomalies were found, but couldn\'t identify the root cause')
             print([*docker, *os_res, *fly_remote, *os_parent, *dbs])
+            with open('client.log', 'a+') as f:
+                f.write('[INFO] Anomalies were found, but couldn\'t identify the root cause\n')
+                f.write(str([*docker, *os_res, *fly_remote, *os_parent, *dbs]) + '\n')
         return False, [*docker, *os_res, *fly_remote, *os_parent, *dbs]
     if dbs:
         return True, dbs
@@ -179,7 +183,6 @@ def table(limits, traces, debug=False):
     analysis = list(map(lambda x: (x[0], x[1][0] / x[1][1]), filter(lambda x: x[1][0] != 0 and 'csf' not in x[0][0], result.items())))
 
     if debug:
-        print(analysis)
         columns = sorted(set(map(lambda x: x[0][1], analysis)))
         rows = sorted(set(map(lambda x: x[0][0], analysis)))
         import pandas as pd
@@ -187,7 +190,12 @@ def table(limits, traces, debug=False):
         for item in analysis:
             (row, col), val = item
             df.loc[row, col] = val
-        print(df)
+        pd.set_option("display.max_rows", None, "display.max_columns", None)
+        with open('client.log', 'a+') as f:
+            f.write('--------------------------------------\n')
+            f.write(str(time.time()) + '\n')
+            f.write(str(analysis) + '\n')
+            f.write(str(df) + '\n')
 
     # Filter not enough amount of trace info. 1000 spans is +- 17 traces only
     if not analysis or sum(map(lambda x: x[1][1], result.items())) < 1000:
