@@ -71,6 +71,10 @@ def process(new_data):
     def clean_tables(data_tables):
             print(f"[DEBUG] Before cleanup sizes are: {len(data_tables['esb'])},{len(data_tables['kpi'])}, {len(data_tables['trace'])}")
 
+            data_tables['esb']   = deque(sorted(data_tables['esb'], key=lambda x: x.start_time))
+            data_tables['trace'] = deque(sorted(data_tables['trace'], key=lambda x: x.start_time))
+            data_tables['kpi']   = deque(sorted(data_tables['kpi'], key=lambda x: x.timestamp))
+            
             while data_tables['esb'] and data_tables['esb'][0].start_time < data_tables['esb'][-1].start_time - ESB_TIME_WINDOW:
                 data_tables['esb'].popleft() 
 
