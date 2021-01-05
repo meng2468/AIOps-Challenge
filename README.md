@@ -2,7 +2,7 @@
 
 This project was done under the scope of the Advanced Network Management course at Tsinghua University.
 
-Project report: `[LINK GOES HERE]`
+Project report is available in `report.pdf` and contains our analysis of the problem, as well as an explanation of what's happening in the submission under `submission/`.
 
 ## Code organization
 The repository is organized in the following 3 folders:
@@ -18,7 +18,7 @@ The repository is organized in the following 3 folders:
 │   ├── data_processing         # Notebooks to process trace information        
 │   ├── eda                     # Notebooks for data analysis and visualization
 │   ├── impl                    # Deployment
-│   ├── information             # Documentation
+├── information                 # Documentation
 └── submission                  # Final solution in root folder
 ```
 
