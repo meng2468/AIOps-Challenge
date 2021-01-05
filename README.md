@@ -1,53 +1,51 @@
-# ANM Project
+# AIOps Challenge 2020
+
+This project was done under the scope of the Advanced Network Management course at Tsinghua University.
+
+Project report: `[LINK GOES HERE]`
+
+## Code organization
+The repository is organized in the following 3 folders:
+- data: Contains the competition dataset.
+- deprecated: Contains all the failed approaches before reaching the final solution.
+- submission: Contains the code of the final solution.
+
+
+```
+├── data                         
+│   ├── full_data               # Functions to process and parse data 
+├── deprecated                  # Old solutions
+│   ├── data_processing         # Notebooks to process trace information        
+│   ├── eda                     # Notebooks for data analysis and visualization
+│   ├── impl                    # Deployment
+│   ├── information             # Documentation
+└── submission                  # Final solution in root folder
+```
+
+## Quick start
+To run this project, we recommend you to have Python >= 3.6 installed in your system.
+Navigate to the submission folder to check the final submission.
+
+To run the main program, simply execute this command:
+```
+python3 main.py
+```
+
+(Optional) Start Kafka and Zookeeper locally to perform the local testing. After both are running, execute the server to stream the test data:
+
+```
+python3 server.py
+```
+
 ## Project Resources
-- Elearning documents in /Information
 - https://github.com/NetManAIOps/aiops2020-judge/tree/master/final (Competition Github)
-- https://cloud.tsinghua.edu.cn/f/e06aaab7135c44e8beec/?dl=1 (Conmpetition Slides)
+- https://cloud.tsinghua.edu.cn/f/e06aaab7135c44e8beec/?dl=1 (Conmpetition Slides in Chinese)
 - http://81.70.98.179:8000/standings/show/ (Ranking)
 
-## Task
-### Anomaly Detection
-Compute a real-valued score indicating the certainty of having an anomaly, given historical data. 
+## Structure of the challenge
+We are given 3 types of data (ESB, Trace and KPI) and we are supposed to implement a program that is able to timely detect the anomalies.
+The anomaly consists of a collection of pairs (host, kpi).
 
-Human operators can then affect whether to declare an anomaly by choosing a threshold, where a data point with a score exceeding this threshold indicates an anomaly.
-
-### TroubleShooting
-Find out system nodes (vm or docker) and KPIs where the root cause occurs when a failure happens.
-
-The troubleshooting in the figure has 3 steps:
-1. Find the time point when the business success rate was significantly lower than 1. (ESB)
-2. Around the time point, look into the anomalous behaviors of microservices and record containers or hosts where the microservices are deployed. (Trace)
-3. After the abnormal nodes, hosts or containers, are found.  Detect which KPIs of the nodes perform anomalously. (KPI)
-
-## Data 
-### ESB business indicator(ESB)
-Minute-wise request information for osb_001
-- startTime: aggr. info on all requests for the following minute
-- avg_time: average time spent processing a request.
-- num: number of requests
-- succee_num: the number of submitted requests which are successfully completed.
-- succee_rate: succee_num / num
-
-EDA: https://github.com/meng2468/anm-project/blob/main/eda/esb.ipynb
-
-### Trace
-- id: span id
-- pid: parent span id
-- tracid: id of trace the span belongs to
-- cmdb_id: host
-- callType: csv's are split based on this
-    - osb, remoteprocess, flyremote inside span
-    - csf, local, jdbc outside of span
-- success: whether service is processed succesfully
-- dsName: database accesed by microservice
-
-EDA: https://github.com/meng2468/anm-project/blob/main/eda/trace.ipynb
-
-### Host KPIs data
-Time series KPI (Key Performance Indicator) data for different hosts
-- itemid: KPI identifier?
-- name: KPI identifier?
-- bomc_id: KPI identifier?
-- timestamp: measurement time
-- value: KPI value
-- cmdb_id: host name
+Constraints:
+- Data is served in a Kafka Queue
+- No GPU support
